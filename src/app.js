@@ -72,6 +72,7 @@ function createApp(options = {}) {
   app.get('/', sessionController.getHomepage.bind(sessionController));
   app.get('/session/:id', sessionController.getSessionDetail.bind(sessionController));
   app.get('/session/:id/time-analyze', sessionController.getTimeAnalysis.bind(sessionController));
+  app.get('/session/:id/export', sessionController.exportSession.bind(sessionController));
 
   // API routes (more specific routes first)
   app.get('/api/sessions/load-more', sessionController.loadMoreSessions.bind(sessionController));

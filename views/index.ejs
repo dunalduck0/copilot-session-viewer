@@ -444,7 +444,7 @@
     <h1>🤖 Session Viewer</h1>
     <p class="subtitle">View GitHub Copilot session logs</p>
     
-    <form id="sessionForm" onsubmit="viewSession(event)">
+    <form id="sessionForm">
       <div class="input-group">
         <input 
           type="text" 
@@ -627,6 +627,9 @@
         window.location.href = `/session/${sessionId}`;
       }
     }
+
+    // Bind form submit event
+    document.getElementById('sessionForm').addEventListener('submit', viewSession);
 
     // File import handling
     const fileInput = document.getElementById('fileInput');

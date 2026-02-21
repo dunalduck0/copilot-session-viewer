@@ -1737,6 +1737,19 @@
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            
+            // Show success feedback
+            const originalText = '📤 Share Session';
+            const successText = '✓ Downloaded!';
+            const btn = document.querySelector('.export-btn');
+            if (btn) {
+              btn.textContent = successText;
+              btn.style.background = '#238636';
+              setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+              }, 2000);
+            }
           } catch (err) {
             console.error('Share session error:', err);
             alert('Failed to share session: ' + err.message);

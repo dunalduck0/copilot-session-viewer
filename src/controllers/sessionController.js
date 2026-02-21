@@ -1,5 +1,8 @@
 const SessionService = require('../services/sessionService');
 const { isValidSessionId } = require('../utils/helpers');
+const AdmZip = require('adm-zip');
+const path = require('path');
+const fs = require('fs');
 
 class SessionController {
   constructor(sessionService = null) {
@@ -218,6 +221,114 @@ class SessionController {
     } catch (err) {
       console.error('Error loading timeline:', err);
       res.status(500).json({ error: 'Error loading timeline' });
+    }
+  }
+
+  // Export session as zip
+  async exportSession(req, res) {
+    const sessionId = req.params.id;
+
+    if (!isValidSessionId(sessionId)) {
+      return res.status(400).json({ error: 'Invalid session ID' });
+    }
+
+    try {
+      // Get session to verify it exists and get its source
+      const session = await this.sessionService.sessionRepository.findById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Find session file/directory path based on source
+      let sessionPath;
+      let isDirectory = false;
+
+      if (session.source === 'copilot') {
+        const copilotSource = this.sessionService.sessionRepository.sources.find(s => s.type === 'copilot');
+        if (!copilotSource) {
+          return res.status(404).json({ error: 'Copilot source not found' });
+        }
+
+        const basePath = path.join(copilotSource.dir, sessionId);
+        try {
+          const stats = await fs.promises.stat(basePath);
+          if (stats.isDirectory()) {
+            sessionPath = basePath;
+            isDirectory = true;
+          } else {
+            sessionPath = `${basePath}.jsonl`;
+          }
+        } catch {
+          sessionPath = `${basePath}.jsonl`;
+        }
+      } else if (session.source === 'claude') {
+        const claudeSource = this.sessionService.sessionRepository.sources.find(s => s.type === 'claude');
+        if (!claudeSource) {
+          return res.status(404).json({ error: 'Claude source not found' });
+        }
+
+        // Claude sessions are in projects/*/sessionId.jsonl
+        const projectDirs = await fs.promises.readdir(path.join(claudeSource.dir, 'projects'));
+        for (const projectDir of projectDirs) {
+          const candidatePath = path.join(claudeSource.dir, 'projects', projectDir, `${sessionId}.jsonl`);
+          try {
+            await fs.promises.access(candidatePath);
+            sessionPath = candidatePath;
+            break;
+          } catch {
+            // Try next project
+          }
+        }
+
+        if (!sessionPath) {
+          return res.status(404).json({ error: 'Session file not found' });
+        }
+      } else if (session.source === 'pi-mono') {
+        const piMonoSource = this.sessionService.sessionRepository.sources.find(s => s.type === 'pi-mono');
+        if (!piMonoSource) {
+          return res.status(404).json({ error: 'Pi-Mono source not found' });
+        }
+
+        // Pi-Mono sessions are timestamp-based JSONL files
+        const files = await fs.promises.readdir(piMonoSource.dir);
+        const matchingFile = files.find(f => f.includes(sessionId) && f.endsWith('.jsonl'));
+        if (!matchingFile) {
+          return res.status(404).json({ error: 'Session file not found' });
+        }
+        sessionPath = path.join(piMonoSource.dir, matchingFile);
+      }
+
+      if (!sessionPath) {
+        return res.status(404).json({ error: 'Session file not found' });
+      }
+
+      // Verify path exists
+      try {
+        await fs.promises.access(sessionPath);
+      } catch {
+        return res.status(404).json({ error: 'Session file not accessible' });
+      }
+
+      // Create zip
+      const zip = new AdmZip();
+
+      if (isDirectory) {
+        // Add entire directory
+        zip.addLocalFolder(sessionPath, sessionId);
+      } else {
+        // Add single file
+        const fileName = path.basename(sessionPath);
+        zip.addLocalFile(sessionPath, '', fileName);
+      }
+
+      // Send zip file
+      const zipBuffer = zip.toBuffer();
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="session-${sessionId}.zip"`);
+      res.send(zipBuffer);
+    } catch (err) {
+      console.error('Error exporting session:', err);
+      res.status(500).json({ error: 'Error exporting session' });
     }
   }
 }
