@@ -1,5 +1,4 @@
 const SessionController = require('../src/controllers/sessionController');
-const crypto = require('crypto');
 
 describe('SessionController - ETag and Pagination Coverage', () => {
   let controller;

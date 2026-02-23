@@ -1,9 +1,5 @@
 const { EventEmitter } = require('events');
 
-// Mock process.exit to prevent actual exit during tests
-const originalExit = process.exit;
-const originalSetTimeout = global.setTimeout;
-
 describe('ProcessManager', () => {
   let processManager;
   let exitSpy;

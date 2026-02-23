@@ -1,6 +1,4 @@
 const InsightController = require('../src/controllers/insightController');
-const path = require('path');
-const os = require('os');
 
 describe('InsightController - Additional Coverage', () => {
   let controller;
