@@ -572,14 +572,23 @@ describe('InsightService', () => {
       const lockFile = path.join(sessionPath, 'agent-review.md.lock');
       await fs.writeFile(lockFile, JSON.stringify({ sessionId }));
 
-      // Make lock file old
+      // Mock fs.stat to return old birthtime (utimes doesn't change birthtime)
       const oldTime = Date.now() - config.INSIGHT_TIMEOUT_MS - 10000;
-      await fs.utimes(lockFile, new Date(oldTime), new Date(oldTime));
+      const realStat = fs.stat;
+      jest.spyOn(fs, 'stat').mockImplementation(async (filePath) => {
+        const stats = await realStat(filePath);
+        if (filePath === lockFile) {
+          stats.birthtime = new Date(oldTime);
+        }
+        return stats;
+      });
 
       const result = await service.getInsightStatus(sessionId);
 
       expect(result.status).toBe('timeout');
       expect(result.ageMs).toBeGreaterThan(config.INSIGHT_TIMEOUT_MS);
+
+      fs.stat.mockRestore();
     });
 
     it('should return timeout status with log from tmp file', async () => {
@@ -591,15 +600,24 @@ describe('InsightService', () => {
       await fs.writeFile(lockFile, JSON.stringify({ sessionId }));
       await fs.writeFile(tmpFile, 'Partial output before timeout');
 
-      // Make lock file old
+      // Mock fs.stat to return old birthtime (utimes doesn't change birthtime)
       const oldTime = Date.now() - config.INSIGHT_TIMEOUT_MS - 10000;
-      await fs.utimes(lockFile, new Date(oldTime), new Date(oldTime));
+      const realStat = fs.stat;
+      jest.spyOn(fs, 'stat').mockImplementation(async (filePath) => {
+        const stats = await realStat(filePath);
+        if (filePath === lockFile) {
+          stats.birthtime = new Date(oldTime);
+        }
+        return stats;
+      });
 
       const result = await service.getInsightStatus(sessionId);
 
       expect(result.status).toBe('timeout');
       expect(result.log).toBe('Partial output before timeout');
       expect(result.ageMs).toBeGreaterThan(config.INSIGHT_TIMEOUT_MS);
+
+      fs.stat.mockRestore();
     });
 
     it('should return not_started status when no insight exists', async () => {
