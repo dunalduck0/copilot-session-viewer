@@ -145,6 +145,12 @@ describe('UploadController', () => {
 
     controller = new UploadController();
 
+    // Ensure upload directory exists and is clean
+    if (fs.existsSync(controller.uploadDir)) {
+      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true }).catch(() => {});
+    }
+    await fs.promises.mkdir(controller.uploadDir, { recursive: true });
+
     // Reset mocks
     jest.clearAllMocks();
     jest.restoreAllMocks();
@@ -156,10 +162,10 @@ describe('UploadController', () => {
     if (consoleErrorSpy) {
       consoleErrorSpy.mockRestore();
     }
-    // Cleanup
-    await fs.promises.rm(tmpSessionDir, { recursive: true, force: true });
+    // Cleanup - ignore errors if directory doesn't exist or has issues
+    await fs.promises.rm(tmpSessionDir, { recursive: true, force: true }).catch(() => {});
     if (fs.existsSync(controller.uploadDir)) {
-      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true });
+      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true }).catch(() => {});
     }
     delete process.env.SESSION_DIR;
   });

@@ -58,6 +58,12 @@ describe('UploadController - Multi-Format Support', () => {
     process.env.SESSION_DIR = tmpSessionDirs.copilot;
     controller = new UploadController();
 
+    // Ensure upload directory exists and is clean
+    if (fs.existsSync(controller.uploadDir)) {
+      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true }).catch(() => {});
+    }
+    await fs.promises.mkdir(controller.uploadDir, { recursive: true });
+
     // Override session directories for testing
     controller.SESSION_DIRS = tmpSessionDirs;
 
@@ -68,12 +74,12 @@ describe('UploadController - Multi-Format Support', () => {
   });
 
   afterEach(async () => {
-    // Cleanup
+    // Cleanup - ignore errors if directory doesn't exist or has issues
     for (const dir of Object.values(tmpSessionDirs)) {
-      await fs.promises.rm(dir, { recursive: true, force: true });
+      await fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
     if (fs.existsSync(controller.uploadDir)) {
-      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true });
+      await fs.promises.rm(controller.uploadDir, { recursive: true, force: true }).catch(() => {});
     }
     delete process.env.SESSION_DIR;
   });
