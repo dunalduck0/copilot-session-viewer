@@ -10,7 +10,10 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 
 // Session directory (use env var or default)
-const SESSION_DIR = process.env.SESSION_DIR || path.join(process.env.HOME || '/tmp', '.copilot', 'session-state');
+// Support COPILOT_SESSION_DIR (new) with SESSION_DIR as fallback (legacy)
+const SESSION_DIR = process.env.COPILOT_SESSION_DIR || 
+                    process.env.SESSION_DIR || 
+                    path.join(process.env.HOME || '/tmp', '.copilot', 'session-state');
 
 // Generate 5 test sessions to ensure homepage has content
 const NUM_SESSIONS = 5;

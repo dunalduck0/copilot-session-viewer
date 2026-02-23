@@ -10,7 +10,9 @@ const os = require('os');
 const { randomUUID } = require('crypto');
 
 async function generateClaudeSession() {
-  const claudeDir = path.join(os.homedir(), '.claude', 'projects');
+  // Support CLAUDE_SESSION_DIR env var or default
+  const claudeDir = process.env.CLAUDE_SESSION_DIR || 
+                    path.join(os.homedir(), '.claude', 'projects');
   const sessionId = 'claude-test-session-001';
   const sessionPath = path.join(claudeDir, sessionId);
 
@@ -86,7 +88,9 @@ async function generateClaudeSession() {
 }
 
 async function generatePiSession() {
-  const piDir = path.join(os.homedir(), '.pi', 'agent', 'sessions');
+  // Support PI_MONO_SESSION_DIR env var or default
+  const piDir = process.env.PI_MONO_SESSION_DIR || 
+                path.join(os.homedir(), '.pi', 'agent', 'sessions');
   const sessionId = 'pi-test-session-001';
   const sessionPath = path.join(piDir, sessionId);
 
