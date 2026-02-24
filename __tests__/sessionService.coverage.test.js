@@ -520,14 +520,15 @@ describe('SessionService - Coverage Enhancement', () => {
     });
   });
 
-  describe('_matchPiMonoToolResults (lines 504-553)', () => {
+  describe('_mergePiMonoToolResults (lines 504-553)', () => {
     it('should match pi-mono tool results by parentId chain', () => {
       const events = [
         {
           id: 'msg-1',
-          type: 'assistant.message',
+          type: 'message',
           timestamp: '2026-02-20T10:00:00.000Z',
           data: {
+            role: 'assistant',
             message: 'Running tools',
             tools: [
               { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} },
@@ -537,33 +538,33 @@ describe('SessionService - Coverage Enhancement', () => {
         },
         {
           id: 'result-1',
-          type: 'tool.result',
+          type: 'message',
           parentId: 'msg-1',
           timestamp: '2026-02-20T10:00:01.000Z',
-          data: { result: 'File content' }
+          data: { role: 'toolResult', result: 'File content' }
         },
         {
           id: 'result-2',
-          type: 'tool.result',
+          type: 'message',
           parentId: 'result-1',
           timestamp: '2026-02-20T10:00:02.000Z',
-          data: { result: 'Write success' }
+          data: { role: 'toolResult', result: 'Write success' }
         }
       ];
 
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
 
-      service._matchPiMonoToolResults(events);
+      service._mergePiMonoToolResults(events);
 
       expect(events[0].data.tools[0].result).toBe('File content');
-      expect(events[0].data.tools[0]._matched).toBe(true);
+      expect(events[0].data.tools[0].status).toBe('completed');
       expect(events[0].data.tools[1].result).toBe('Write success');
-      expect(events[0].data.tools[1]._matched).toBe(true);
+      expect(events[0].data.tools[1].status).toBe('completed');
 
-      // tool.result events should be removed
-      expect(events.filter(e => e.type === 'tool.result')).toHaveLength(0);
+      // toolResult events should be removed
+      expect(events.filter(e => e.data?.role === 'toolResult')).toHaveLength(0);
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[PI-MONO] Removed 2 matched tool.result events')
+        expect.stringContaining('[PI-MONO] Merged 2 toolResult events')
       );
 
       consoleLogSpy.mockRestore();
@@ -573,8 +574,9 @@ describe('SessionService - Coverage Enhancement', () => {
       const events = [
         {
           id: 'msg-1',
-          type: 'assistant.message',
+          type: 'message',
           data: {
+            role: 'assistant',
             tools: [
               { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} },
               { type: 'tool_use', id: 'tool-2', name: 'Write', input: {} }
@@ -583,16 +585,22 @@ describe('SessionService - Coverage Enhancement', () => {
         },
         {
           id: 'result-1',
-          type: 'tool.result',
+          type: 'message',
           parentId: 'msg-1',
-          data: { result: 'Only one result' }
+          data: { role: 'toolResult', result: 'Only one result' }
         }
       ];
 
-      service._matchPiMonoToolResults(events);
+      service._mergePiMonoToolResults(events);
 
-      expect(events[0].data.tools[0]._matched).toBe(true);
-      expect(events[0].data.tools[1]._matched).toBeUndefined();
+      // After merge, first tool should have result
+      expect(events[0].data.tools[0].result).toBe('Only one result');
+      expect(events[0].data.tools[0].status).toBe('completed');
+      // Second tool has no result
+      expect(events[0].data.tools[1].result).toBeUndefined();
+      expect(events[0].data.tools[1].status).toBeUndefined();
+      // toolResult event should be removed
+      expect(events.length).toBe(1);
     });
   });
 
@@ -610,7 +618,9 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      expect(normalized.type).toBe('user.message');
+      // Pi-Mono keeps original type "message", preserves role in data
+      expect(normalized.type).toBe('message');
+      expect(normalized.data.role).toBe('user');
       expect(normalized.data.message).toBe('User message');
     });
 
@@ -628,7 +638,9 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      expect(normalized.type).toBe('assistant.message');
+      // Pi-Mono keeps original type "message", preserves role in data
+      expect(normalized.type).toBe('message');
+      expect(normalized.data.role).toBe('assistant');
       expect(normalized.data.message).toBe('Using tools');
       expect(normalized.data.tools).toHaveLength(1);
       expect(normalized.data.tools[0].name).toBe('Read');
@@ -647,9 +659,10 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      expect(normalized.type).toBe('tool.result');
+      // Pi-Mono keeps original type "message", preserves role in data
+      expect(normalized.type).toBe('message');
+      expect(normalized.data.role).toBe('toolResult');
       expect(normalized.data.result).toBe('Tool output');
-      expect(normalized.data._needsMatching).toBe(true);
     });
 
     it('should normalize pi-mono model_change events', () => {

@@ -1480,7 +1480,17 @@
           return lines.slice(0, 20).join('\n') + '\n\n...';
         };
         
-        const getBadgeInfo = (type) => {
+        const getBadgeInfo = (type, item) => {
+          // Pi-Mono message events: use role for badge
+          if (type === 'message' && item?.data?.role) {
+            const roleMap = {
+              user: { label: 'USER', class: 'badge-user' },
+              assistant: { label: 'ASSISTANT', class: 'badge-assistant' },
+              toolResult: { label: 'TOOL RESULT', class: 'badge-tool' }
+            };
+            return roleMap[item.data.role] || { label: 'MESSAGE', class: 'badge-info' };
+          }
+          
           // Special case for specific event types
           if (type === 'session.model_change') {
             return { label: 'MODEL CHANGE', class: 'badge-session' };
@@ -1608,25 +1618,27 @@
         const getToolGroups = (event) => {
           // Unified format from server (both Copilot and Claude normalized to data.tools)
           if (event.data?.tools && Array.isArray(event.data.tools)) {
-            return event.data.tools.map(tool => {
-              if (tool.type === 'tool_use') {
+            return event.data.tools
+              .filter(tool => tool && typeof tool === 'object' && tool.name) // Any tool object with a name
+              .map(tool => {
+                // Check if tool has result (works for all formats)
+                const hasResult = tool.result !== undefined || tool.status === 'completed' || tool.status === 'error';
                 return {
                   tool: tool.name,
                   start: {
                     data: {
                       toolName: tool.name,
-                      arguments: tool.input
+                      arguments: tool.input || tool.arguments || {}
                     }
                   },
-                  complete: tool._matched ? {
+                  complete: hasResult ? {
                     data: {
-                      result: tool.result
+                      result: tool.result,
+                      error: tool.status === 'error' ? tool.error : null
                     }
                   } : null
                 };
-              }
-              return null;
-            }).filter(g => g !== null);
+              });
           }
           
           return [];
@@ -2257,8 +2269,8 @@
                       :style="getSubagentColor(item) ? { '--subagent-border-color': getSubagentColor(item) } : {}"
                     >
                       <div class="event-header">
-                        <span :class="['event-badge', getBadgeInfo(item.type).class]">
-                          {{ getBadgeInfo(item.type).label }}
+                        <span :class="['event-badge', getBadgeInfo(item.type, item).class]">
+                          {{ getBadgeInfo(item.type, item).label }}
                         </span>
                         <span
                           v-if="getSubagentInfo(item)"
@@ -2381,7 +2393,7 @@
                         No available message
                       </div>
                       
-                      <!-- Tool calls section (independent of message content) -->
+                      <!-- Tool calls section (independent of message content, but don't need "No available message" if tools exist) -->
                       <div v-if="hasTools(item)" class="tool-list">
                         <div
                           v-for="(group, idx) in getToolGroups(item)"

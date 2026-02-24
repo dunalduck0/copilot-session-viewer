@@ -1413,31 +1413,31 @@
         const turnAnalysis = computed(() => {
           try {
             const sorted = sortedEvents.value;
-            const turnStarts = sorted.filter(e => e.type === 'assistant.turn_start');
+            const assistantMessages = sorted.filter(e => e.type === 'assistant.message');
             const allUserMessages = sorted.filter(e => e.type === 'user.message');
 
-            return turnStarts.map((turn, idx) => {
-              const ts = turn.timestamp;
+            return assistantMessages.map((msg, idx) => {
+              const ts = msg.timestamp;
               if (!ts) {
-                console.warn('[turnAnalysis] Turn without timestamp:', turn);
+                console.warn('[turnAnalysis] Message without timestamp:', msg);
                 return null;
               }
               const startTime = new Date(ts).getTime();
               if (isNaN(startTime)) {
-                console.warn('[turnAnalysis] Invalid timestamp:', ts, turn);
+                console.warn('[turnAnalysis] Invalid timestamp:', ts, msg);
                 return null;
               }
               
-              const nextTurn = turnStarts[idx + 1];
-              const endTime = nextTurn
-                ? new Date(nextTurn.timestamp).getTime()
+              const nextMsg = assistantMessages[idx + 1];
+              const endTime = nextMsg
+                ? new Date(nextMsg.timestamp).getTime()
                 : sessionEnd.value || startTime;
               const duration = endTime - startTime;
 
-              // Find user message before this turn
-              const turnIndex = sorted.indexOf(turn);
+              // Find user message before this assistant message
+              const msgIndex = sorted.indexOf(msg);
               const userMessage = sorted
-                .slice(0, turnIndex)
+                .slice(0, msgIndex)
                 .reverse()
                 .find(e => e.type === 'user.message');
 
@@ -1445,21 +1445,31 @@
                 ? allUserMessages.indexOf(userMessage) + 1
                 : 0;
 
-              // Count tool calls in this turn
-              let toolCalls = 0;
-              for (const e of sorted) {
-                const t = new Date(e.timestamp).getTime();
-                if (t >= startTime && t <= endTime && e.type === 'tool.execution_start') {
-                  toolCalls++;
-                }
+              // Extract display text
+              let displayText = '';
+              const hasText = msg.data?.message && msg.data.message.trim() !== '';
+              
+              if (hasText) {
+                displayText = normalizeMessage(msg.data.message);
+              } else if (msg.data?.tools && msg.data.tools.length > 0) {
+                // Only tool calls, show tool names
+                const toolNames = msg.data.tools.map(t => t.name || 'unknown').join(', ');
+                displayText = `Tool calls: ${toolNames}`;
+              } else {
+                displayText = '(empty assistant message)';
               }
 
+              // Count tool calls
+              const toolCalls = msg.data?.tools?.length || 0;
+
               return {
-                turnId: turn.data?.turnId ?? idx,
+                turnId: msg.id ?? `msg-${idx}`,
                 userReqNumber,
                 message: normalizeMessage(userMessage?.data?.message || userMessage?.data?.content || userMessage?.data?.transformedContent || ''),
-                startTime: turn.timestamp,
-                endTime: nextTurn?.timestamp || events.value[events.value.length - 1]?.timestamp,
+                displayText,
+                hasText,
+                startTime: msg.timestamp,
+                endTime: nextMsg?.timestamp || events.value[events.value.length - 1]?.timestamp,
                 duration,
                 toolCalls
               };

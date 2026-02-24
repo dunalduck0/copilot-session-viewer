@@ -224,9 +224,10 @@ class SessionService {
       this._matchClaudeToolResults(events);
       events = this._expandClaudeToTimelineFormat(events);
     } else if (session.source === 'pi-mono') {
-      this._matchPiMonoToolResults(events);
-      // Expand Pi-Mono format to Copilot-compatible event stream
-      events = this._expandPiMonoToCopilotFormat(events);
+      // Pi-Mono: Keep original event structure, no transformation
+      // Events are already normalized with type="message" + role in data
+      // But we need to merge toolResult events into their parent assistant messages
+      this._mergePiMonoToolResults(events);
     }
     
     // Clean up events for timeline rendering
@@ -518,7 +519,79 @@ class SessionService {
    * After matching, removes tool.result events from the stream (they're attached to tools)
    * @private
    */
-  _matchPiMonoToolResults(events) {
+  /**
+   * Merge Pi-Mono toolResult messages into their parent assistant messages
+   * Pi-Mono has message events with role: user/assistant/toolResult
+   * toolResult events are chained via parentId (first points to assistant, rest chain to previous)
+   * @private
+   */
+  _mergePiMonoToolResults(events) {
+    const toolResultIdsToRemove = new Set();
+
+    // Find all assistant messages with tool calls
+    events.forEach(assistantEvent => {
+      if (assistantEvent.type === 'message' && 
+          assistantEvent.data.role === 'assistant' && 
+          assistantEvent.data.tools && 
+          assistantEvent.data.tools.length > 0) {
+        
+        const tools = assistantEvent.data.tools;
+        
+        // Collect toolResult events by following parentId chain
+        const resultEvents = [];
+        let currentId = assistantEvent.id;
+        
+        // Follow the chain: find events whose parentId points to current
+        let foundMore = true;
+        while (foundMore && resultEvents.length < tools.length) {
+          foundMore = false;
+          for (const event of events) {
+            if (event.type === 'message' && 
+                event.data.role === 'toolResult' && 
+                event.parentId === currentId && 
+                !resultEvents.includes(event)) {
+              resultEvents.push(event);
+              currentId = event.id;
+              foundMore = true;
+              break;
+            }
+          }
+        }
+
+        // Match results to tools by order
+        resultEvents.forEach((resultEvent, index) => {
+          if (index < tools.length) {
+            const tool = tools[index];
+            tool.result = resultEvent.data.result;
+            tool.resultId = resultEvent.id;
+            tool.status = 'completed';
+            toolResultIdsToRemove.add(resultEvent.id);
+          }
+        });
+      }
+    });
+
+    // Remove toolResult events from the stream (they're now merged into assistant messages)
+    const originalLength = events.length;
+    for (let i = events.length - 1; i >= 0; i--) {
+      if (events[i].type === 'message' && 
+          events[i].data.role === 'toolResult' && 
+          toolResultIdsToRemove.has(events[i].id)) {
+        events.splice(i, 1);
+      }
+    }
+    
+    if (toolResultIdsToRemove.size > 0) {
+      console.log(`[PI-MONO] Merged ${toolResultIdsToRemove.size} toolResult events into assistant messages (${originalLength} → ${events.length} events)`);
+    }
+  }
+
+  /**
+   * OLD METHOD - kept for reference, not used anymore
+   * Match Pi-Mono tool results (old format with tool.result type)
+   * @private
+   */
+  _matchPiMonoToolResults_OLD(events) {
     const matchedResultIds = new Set(); // Track matched tool.result event IDs to remove
 
     // Find all assistant messages with tool calls
@@ -705,54 +778,38 @@ class SessionService {
     }
 
     if (source === 'pi-mono') {
-      // Pi-Mono format normalization
+      // Pi-Mono format normalization - KEEP ORIGINAL TYPE
       if (event.type === 'message') {
         const { message } = event;
         
-        if (message.role === 'user') {
-          normalized.type = 'user.message';
-          // Extract text content
-          if (Array.isArray(message.content)) {
-            const textBlocks = message.content.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              normalized.data.message = textBlocks.map(block => block.text).join('\n');
-            }
+        // Keep type as "message", preserve role in data
+        normalized.type = 'message';
+        normalized.data.role = message.role;
+        
+        // Extract text content
+        if (Array.isArray(message.content)) {
+          const textBlocks = message.content.filter(block => block.type === 'text');
+          if (textBlocks.length > 0) {
+            normalized.data.message = textBlocks.map(block => block.text).join('\n');
           }
-        } else if (message.role === 'assistant') {
-          normalized.type = 'assistant.message';
-          // Extract text content
-          if (Array.isArray(message.content)) {
-            const textBlocks = message.content.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              normalized.data.message = textBlocks.map(block => block.text).join('\n');
-            }
-            
-            // Extract tool calls
+          
+          // Extract tool calls (for assistant messages)
+          if (message.role === 'assistant') {
             const toolCalls = message.content.filter(block => block.type === 'toolCall');
             if (toolCalls.length > 0) {
               normalized.data.tools = toolCalls.map(tool => ({
                 type: 'tool_use',
                 id: tool.id,
                 name: tool.name,
-                input: tool.arguments,
-                status: 'running', // Will be updated during matching
-                _matched: false,
-                _piMonoToolCallIndex: toolCalls.indexOf(tool) // Track order for matching
+                input: tool.arguments
               }));
             }
           }
-        } else if (message.role === 'toolResult') {
-          // Pi-Mono tool result - convert to tool.result format
-          normalized.type = 'tool.result';
-          // Extract text content (tool output)
-          if (Array.isArray(message.content)) {
-            const textBlocks = message.content.filter(block => block.type === 'text');
-            if (textBlocks.length > 0) {
-              normalized.data.result = textBlocks.map(block => block.text).join('\n');
-            }
+          
+          // Extract tool result (for toolResult messages)
+          if (message.role === 'toolResult') {
+            normalized.data.result = textBlocks.map(block => block.text).join('\n');
           }
-          // Mark for ordering-based matching (will be matched by position in post-processing)
-          normalized.data._needsMatching = true;
         }
         
         // Preserve usage metadata if available
@@ -766,18 +823,39 @@ class SessionService {
           provider: event.provider,
           model: event.modelId
         };
+        // Generate readable message
+        if (event.provider && event.modelId) {
+          normalized.data.message = `Model changed to ${event.provider}/${event.modelId}`;
+        } else if (event.modelId) {
+          normalized.data.message = `Model changed to ${event.modelId}`;
+        }
       } else if (event.type === 'thinking_level_change') {
         // Normalize to thinking.change format
         normalized.type = 'thinking.change';
         normalized.data = {
           level: event.thinkingLevel
         };
+        // Generate readable message
+        if (event.thinkingLevel) {
+          normalized.data.message = `Thinking level: ${event.thinkingLevel}`;
+        }
       } else if (event.type === 'session') {
-        // Session metadata - keep as-is for now
+        // Session metadata
         normalized.data = {
           cwd: event.cwd,
           version: event.version
         };
+        // Generate readable message
+        const parts = [];
+        if (event.cwd) {
+          parts.push(`Working directory: ${event.cwd}`);
+        }
+        if (event.version) {
+          parts.push(`Session version: ${event.version}`);
+        }
+        if (parts.length > 0) {
+          normalized.data.message = parts.join('\n');
+        }
       }
       
       return normalized;
@@ -1015,7 +1093,8 @@ class SessionService {
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
       
-      if (event.type === 'user.message') {
+      // Pi-Mono uses type="message" with data.role
+      if (event.type === 'message' && event.data.role === 'user') {
         turnId++;
         const turn = {
           id: `turn-${turnId}`,
@@ -1030,10 +1109,10 @@ class SessionService {
         // Find all assistant responses until next user message
         let j = i + 1;
         let assistantId = 0;
-        while (j < events.length && events[j].type !== 'user.message') {
+        while (j < events.length && !(events[j].type === 'message' && events[j].data.role === 'user')) {
           const nextEvent = events[j];
           
-          if (nextEvent.type === 'assistant.message') {
+          if (nextEvent.type === 'message' && nextEvent.data.role === 'assistant') {
             assistantId++;
             turn.endTime = nextEvent.timestamp;
             
@@ -1207,11 +1286,18 @@ class SessionService {
           parentId: event.parentId,
           data: {
             message: event.data.message || '',
-            model: event.data.model
+            model: event.data.model,
+            tools: tools.length > 0 ? tools : undefined
           },
           _synthetic: true,
           _turnNumber: turnCounter,
           _fileIndex: event._fileIndex
+        });
+
+        // Keep the original assistant.message event
+        expanded.push({
+          ...event,
+          _fileIndex: event._fileIndex + 0.05
         });
 
         // Insert tool.execution_start and tool.execution_complete for each tool

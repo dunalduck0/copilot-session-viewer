@@ -66,10 +66,15 @@ class EventNormalizer {
   }
 
   /**
-   * Check if event is an assistant message
+   * Check if event is an assistant message with tools (needs normalization)
    * @private
    */
   _isAssistantMessage(event) {
+    // Check if event has tools array (works for all sources)
+    if (event.data?.tools && Array.isArray(event.data.tools) && event.data.tools.length > 0) {
+      return true;
+    }
+    // Fallback: check specific types (Copilot/Claude legacy)
     return event.type === 'assistant.message' || event.type === 'assistant' || event.type === 'user.message' || event.type === 'user';
   }
 
@@ -131,6 +136,7 @@ class EventNormalizer {
       const endTime = tool._matched ? messageTimestamp : null;
 
       return {
+        type: 'tool_use',  // Preserve type for frontend compatibility
         id: tool.id,
         name: tool.name,
         startTime,
