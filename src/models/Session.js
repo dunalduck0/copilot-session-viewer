@@ -1,3 +1,5 @@
+const path = require('path');
+
 /**
  * Session domain model
  */
@@ -6,6 +8,7 @@ class Session {
     this.id = id;
     this.type = type; // 'directory' or 'file'
     this.source = options.source || 'copilot'; // 'copilot' or 'claude'
+    this.directory = options.directory || null; // Full path to session directory
     this.workspace = options.workspace || {};
     this.createdAt = options.createdAt;
     this.updatedAt = options.updatedAt;
@@ -37,6 +40,7 @@ class Session {
    */
   static fromDirectory(dirPath, id, stats, workspace, eventCount, duration, isImported, hasInsight, copilotVersion, selectedModel, sessionStatus) {
     return new Session(id, 'directory', {
+      directory: dirPath, // Add directory path
       workspace: workspace,
       createdAt: workspace?.created_at || stats.birthtime,
       updatedAt: workspace?.updated_at || stats.mtime,
@@ -67,6 +71,7 @@ class Session {
    */
   static fromFile(filePath, id, stats, eventCount, summary, duration, copilotVersion, selectedModel, sessionStatus) {
     return new Session(id, 'file', {
+      directory: path.dirname(filePath), // Directory containing the file
       createdAt: stats.birthtime,
       updatedAt: stats.mtime,
       summary: summary || 'Legacy session',
@@ -95,6 +100,7 @@ class Session {
       source: this.source,
       sourceName: sourceMetadata.name,
       sourceBadgeClass: sourceMetadata.badgeClass,
+      directory: this.directory, // Include directory path
       workspace: this.workspace,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,

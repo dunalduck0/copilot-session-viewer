@@ -12,30 +12,33 @@ const config = require('../config');
 const processManager = require('../utils/processManager');
 
 class InsightService {
-  constructor(sessionDir) {
-    this.sessionDir = sessionDir;
+  constructor() {
+    // No longer needs session directories - paths are passed directly
   }
 
   /**
    * Get CLI tool configuration based on session source
    * @private
    */
-  _getToolConfig(source) {
+  _getToolConfig(source, sessionPath) {
     const configs = {
       copilot: {
         name: 'Copilot',
         cli: 'copilot',
-        args: (tmpDir, prompt) => ['--config-dir', tmpDir, '--yolo', '-p', prompt]
+        args: (tmpDir, prompt) => ['--config-dir', tmpDir, '--yolo', '-p', prompt],
+        cwd: sessionPath
       },
       claude: {
         name: 'Claude Code',
         cli: 'claude',
-        args: (_tmpDir, prompt) => ['-p', prompt, '--allow-dangerously-skip-permissions', '--dangerously-skip-permissions']
+        args: (_tmpDir, prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
+        cwd: sessionPath
       },
       'pi-mono': {
         name: 'Pi',
         cli: 'pi',
-        args: (_tmpDir, prompt) => ['--yolo', '-p', prompt]
+        args: (_tmpDir, prompt) => ['-p', prompt],
+        cwd: sessionPath
       }
     };
 
@@ -44,18 +47,27 @@ class InsightService {
 
   /**
    * Generate or retrieve insight report
-   * @param {string} sessionId - Session UUID
+   * @param {string} sessionId - Session ID
+   * @param {string} sessionPath - Full path to session directory
    * @param {string} source - Session source: 'copilot', 'claude', or 'pi-mono'
    * @param {boolean} forceRegenerate - Force new generation
    * @returns {Promise<Object>} Insight status and report
    */
-  async generateInsight(sessionId, source = 'copilot', forceRegenerate = false) {
-    const sessionPath = path.join(this.sessionDir, sessionId);
+  async generateInsight(sessionId, sessionPath, source = 'copilot', forceRegenerate = false) {
     const insightFile = path.join(sessionPath, 'agent-review.md');
     const lockFile = path.join(sessionPath, 'agent-review.md.lock');
-    const eventsFile = path.join(sessionPath, 'events.jsonl');
+    
+    // Determine events file location based on directory structure
+    // Try standard events.jsonl first, then <sessionId>.jsonl (for file-type sessions)
+    let eventsFile = path.join(sessionPath, 'events.jsonl');
+    try {
+      await fs.access(eventsFile);
+    } catch {
+      // Try <sessionId>.jsonl (common for Claude file-type sessions)
+      eventsFile = path.join(sessionPath, `${sessionId}.jsonl`);
+    }
 
-    const toolConfig = this._getToolConfig(source);
+    const toolConfig = this._getToolConfig(source, sessionPath);
     const toolName = toolConfig.name;
 
     // Check if complete insight exists
@@ -136,7 +148,7 @@ class InsightService {
     }
 
     // Start generation
-    await this._spawnAnalysisProcess(sessionId, sessionPath, eventsFile, insightFile, lockFile, toolConfig);
+    await this._spawnAnalysisProcess(sessionPath, eventsFile, insightFile, lockFile, toolConfig);
 
     return {
       status: 'generating',
@@ -149,11 +161,12 @@ class InsightService {
    * Spawn analysis process safely (no shell)
    * @private
    */
-  async _spawnAnalysisProcess(sessionId, sessionPath, eventsFile, insightFile, lockFile, toolConfig) {
+  async _spawnAnalysisProcess(sessionPath, eventsFile, insightFile, lockFile, toolConfig) {
+    const sessionId = path.basename(sessionPath); // Extract session ID from path
     const tmpDir = path.join(os.tmpdir(), `agent-review-${sessionId}-${Date.now()}`);
-    await fs.mkdir(tmpDir, { recursive: true });
+    await fs.mkdir(tmpDir, { recursive: true});
 
-    const prompt = this._buildPrompt(insightFile);
+    const prompt = this._buildPrompt(insightFile, eventsFile);
     const outputFile = path.join(sessionPath, 'agent-review.md.tmp');
 
     // Spawn analysis tool directly (no shell)
@@ -261,19 +274,20 @@ class InsightService {
    * Build insight generation prompt
    * @private
    */
-  _buildPrompt(outputPath) {
+  _buildPrompt(outputPath, eventsFile) {
     const sessionDir = path.dirname(outputPath);
+    const eventsFilename = path.basename(eventsFile);
     const workDir = `${sessionDir}/.output`;
-    return `You are an expert AI agent evaluator. The current working directory is a Copilot CLI session folder (located at ~/.copilot/session-state/<session_id>/). It contains the raw session data from an AI coding agent run.
+    return `You are an expert AI agent evaluator. The current working directory is an AI coding agent session folder. It contains the raw session data from an agent run.
 
 **Step 1 — Discover session files.** Run \`ls -la\` to see what's available, then note which files exist:
-- \`events.jsonl\` — the main session event log (JSONL, one JSON event per line). Primary data source. May be large.
+- \`${eventsFilename}\` — the main session event log (JSONL, one JSON event per line). Primary data source. May be large.
 - \`plan.md\` — the agent's plan (if it exists).
 - \`workspace.yaml\` — workspace configuration (if it exists).
 - Any other relevant files.
 
 **Step 2 — Spawn 3 sub-agents for parallel analysis.** First create the working directory: \`mkdir -p ${workDir}\`. Then use the Task tool to launch ALL of the following sub-agents simultaneously (in a single message with multiple Task tool calls). Each sub-agent should:
-- Read \`events.jsonl\` from \`${sessionDir}\` (use Bash: \`cat\`, \`jq\`, or \`python3\` to parse)
+- Read \`${eventsFilename}\` from \`${sessionDir}\` (use Bash: \`cat\`, \`jq\`, or \`python3\` to parse)
 - Read other session files as needed
 - Write its findings to an intermediate file in \`${workDir}/\`
 - Return a summary of its findings
@@ -400,8 +414,22 @@ IMPORTANT CONSTRAINTS:
   /**
    * Get insight status
    */
-  async getInsightStatus(sessionId) {
-    const sessionPath = path.join(this.sessionDir, sessionId);
+  /**
+   * Get insight status
+   * @param {string} sessionId - Session ID
+   * @param {string} sessionPath - Full path to session directory
+   * @param {string} source - Session source
+   * @returns {Promise<Object>} Status object
+   */
+  async getInsightStatus(sessionId, sessionPath, source = 'copilot') {
+    return await this._getStatusForSource(sessionPath);
+  }
+
+  /**
+   * Get status for a specific session directory
+   * @private
+   */
+  async _getStatusForSource(sessionPath) {
     const insightFile = path.join(sessionPath, 'agent-review.md');
     const lockFile = path.join(sessionPath, 'agent-review.md.lock');
     const tmpFile = path.join(sessionPath, 'agent-review.md.tmp');
@@ -454,9 +482,12 @@ IMPORTANT CONSTRAINTS:
 
   /**
    * Delete insight report
+   * @param {string} sessionId - Session ID
+   * @param {string} sessionPath - Full path to session directory
+   * @param {string} source - Session source
+   * @returns {Promise<Object>} Result object
    */
-  async deleteInsight(sessionId) {
-    const sessionPath = path.join(this.sessionDir, sessionId);
+  async deleteInsight(sessionId, sessionPath, source = 'copilot') {
     const insightFile = path.join(sessionPath, 'agent-review.md');
 
     try {

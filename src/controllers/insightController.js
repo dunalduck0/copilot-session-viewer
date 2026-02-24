@@ -8,8 +8,8 @@ class InsightController {
     if (insightService) {
       this.insightService = insightService;
     } else {
-      const SESSION_DIR = process.env.SESSION_DIR || path.join(os.homedir(), '.copilot', 'session-state');
-      this.insightService = new InsightService(SESSION_DIR);
+      // Use default multi-source configuration
+      this.insightService = new InsightService();
     }
     
     // SessionService for getting session metadata (source)
@@ -31,19 +31,17 @@ class InsightController {
         return res.status(400).json({ error: 'Invalid session ID' });
       }
 
-      // Get session to determine source (copilot/claude/pi-mono)
-      let sessionSource = 'copilot'; // default
-      try {
-        const session = await this.sessionService.getSessionById(sessionId);
-        if (session && session.source) {
-          sessionSource = session.source;
-        }
-      } catch (_err) {
-        // Fall back to default if session not found
-        console.warn(`Could not determine session source for ${sessionId}, using default: copilot`);
+      // Get session to determine source and directory
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
       }
 
-      const result = await this.insightService.generateInsight(sessionId, sessionSource, forceRegenerate);
+      if (!session.directory) {
+        return res.status(400).json({ error: 'Session directory not available' });
+      }
+
+      const result = await this.insightService.generateInsight(session.id, session.directory, session.source, forceRegenerate);
       res.json(result);
     } catch (err) {
       console.error('Error generating insight:', err);
@@ -60,7 +58,17 @@ class InsightController {
         return res.status(400).json({ error: 'Invalid session ID' });
       }
 
-      const result = await this.insightService.getInsightStatus(sessionId);
+      // Get session to determine directory
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      if (!session.directory) {
+        return res.status(400).json({ error: 'Session directory not available' });
+      }
+
+      const result = await this.insightService.getInsightStatus(session.id, session.directory, session.source);
       res.json(result);
     } catch (err) {
       console.error('Error getting insight status:', err);
@@ -77,7 +85,17 @@ class InsightController {
         return res.status(400).json({ error: 'Invalid session ID' });
       }
 
-      const result = await this.insightService.deleteInsight(sessionId);
+      // Get session to determine directory
+      const session = await this.sessionService.getSessionById(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      if (!session.directory) {
+        return res.status(400).json({ error: 'Session directory not available' });
+      }
+
+      const result = await this.insightService.deleteInsight(session.id, session.directory, session.source);
       res.json(result);
     } catch (err) {
       console.error('Error deleting insight:', err);
