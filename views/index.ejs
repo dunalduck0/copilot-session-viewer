@@ -749,18 +749,9 @@
       // Add status badges
       let badges = '';
 
-      // Add source badge (at the beginning)
-      let sourceClass, sourceLabel;
-      if (session.source === 'claude') {
-        sourceClass = 'source-claude';
-        sourceLabel = 'Claude';
-      } else if (session.source === 'pi-mono') {
-        sourceClass = 'source-pi-mono';
-        sourceLabel = 'Pi';
-      } else {
-        sourceClass = 'source-copilot';
-        sourceLabel = 'Copilot';
-      }
+      // Add source badge (use backend-provided metadata - Violation #3 & #5 fix)
+      const sourceClass = session.sourceBadgeClass || 'source-copilot';
+      const sourceLabel = session.sourceName || 'Copilot';
       badges += `<span class="status-badge ${sourceClass}" title="${sourceLabel} CLI">${sourceLabel}</span>`;
 
       if (session.sessionStatus === 'wip') {

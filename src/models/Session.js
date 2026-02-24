@@ -86,10 +86,15 @@ class Session {
    * @returns {object}
    */
   toJSON() {
+    // Generate display-ready source metadata (Violation #3 & #5 fix)
+    const sourceMetadata = this._getSourceDisplayMetadata(this.source);
+    
     return {
       id: this.id,
       type: this.type,
       source: this.source,
+      sourceName: sourceMetadata.name,
+      sourceBadgeClass: sourceMetadata.badgeClass,
       workspace: this.workspace,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -103,6 +108,19 @@ class Session {
       selectedModel: this.selectedModel,
       sessionStatus: this.sessionStatus
     };
+  }
+
+  /**
+   * Get display metadata for source
+   * @private
+   */
+  _getSourceDisplayMetadata(source) {
+    const metadata = {
+      'copilot': { name: 'Copilot', badgeClass: 'source-copilot' },
+      'claude': { name: 'Claude', badgeClass: 'source-claude' },
+      'pi-mono': { name: 'Pi', badgeClass: 'source-pi-mono' }
+    };
+    return metadata[source] || { name: source, badgeClass: 'source-unknown' };
   }
 }
 

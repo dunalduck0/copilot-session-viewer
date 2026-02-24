@@ -729,6 +729,65 @@ class SessionService {
   }
 
   /**
+   * Generate badge display information for an event
+   * @private
+   */
+  _generateBadgeInfo(normalized) {
+    const type = normalized.type;
+    const data = normalized.data || {};
+    
+    // Special case: toolResult still uses type='message'
+    if (type === 'message' && data.role === 'toolResult') {
+      normalized.data.badgeLabel = 'TOOL RESULT';
+      normalized.data.badgeClass = 'badge-tool';
+      return;
+    }
+    
+    // Special cases for specific event types
+    if (type === 'session.model_change' || type === 'model.change') {
+      normalized.data.badgeLabel = 'MODEL CHANGE';
+      normalized.data.badgeClass = 'badge-session';
+      return;
+    }
+    if (type === 'session.truncation') {
+      normalized.data.badgeLabel = 'TRUNCATION';
+      normalized.data.badgeClass = 'badge-truncation';
+      return;
+    }
+    if (type === 'session.compaction_start' || type === 'session.compaction_complete' || type === 'compaction') {
+      normalized.data.badgeLabel = 'COMPACTION';
+      normalized.data.badgeClass = 'badge-compaction';
+      return;
+    }
+    if (type === 'thinking.change') {
+      normalized.data.badgeLabel = 'THINKING';
+      normalized.data.badgeClass = 'badge-session';
+      return;
+    }
+    
+    // Extract category from type (e.g., 'user.message' → 'user')
+    const parts = (type || '').split('.');
+    const category = parts[0] || 'unknown';
+    
+    const badgeMap = {
+      user: { label: 'USER', class: 'badge-user' },
+      assistant: { label: 'ASSISTANT', class: 'badge-assistant' },
+      reasoning: { label: 'REASONING', class: 'badge-reasoning' },
+      turn: { label: 'TURN', class: 'badge-turn' },
+      tool: { label: 'TOOL', class: 'badge-tool' },
+      subagent: { label: 'SUBAGENT', class: 'badge-subagent' },
+      skill: { label: 'SKILL', class: 'badge-skill' },
+      session: { label: 'SESSION', class: 'badge-session' },
+      error: { label: 'ERROR', class: 'badge-error' },
+      abort: { label: 'ABORT', class: 'badge-error' }
+    };
+    
+    const badge = badgeMap[category] || { label: category.toUpperCase(), class: 'badge-info' };
+    normalized.data.badgeLabel = badge.label;
+    normalized.data.badgeClass = badge.class;
+  }
+
+  /**
    * Normalize event to unified format for frontend
    * @private
    */
@@ -774,6 +833,9 @@ class SessionService {
         }
         // If only toolcalls, leave message empty (don't create placeholder)
       }
+      
+      // Generate badge display info
+      this._generateBadgeInfo(normalized);
       return normalized;
     }
 
@@ -865,6 +927,8 @@ class SessionService {
         }
       }
       
+      // Generate badge display info
+      this._generateBadgeInfo(normalized);
       return normalized;
     }
 
@@ -979,6 +1043,8 @@ class SessionService {
         }
     }
 
+    // Generate badge display info
+    this._generateBadgeInfo(normalized);
     return normalized;
   }
 

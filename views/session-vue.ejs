@@ -1481,8 +1481,13 @@
         };
         
         const getBadgeInfo = (type, item) => {
+          // Prefer backend-generated badge info (Violation #4 fix)
+          if (item?.data?.badgeLabel && item?.data?.badgeClass) {
+            return { label: item.data.badgeLabel, class: item.data.badgeClass };
+          }
+          
+          // Fallback: frontend logic for backward compatibility
           // Pi-Mono toolResult events: still use type='message' with role='toolResult'
-          // (user/assistant are now 'user.message'/'assistant.message')
           if (type === 'message' && item?.data?.role === 'toolResult') {
             return { label: 'TOOL RESULT', class: 'badge-tool' };
           }
@@ -2089,15 +2094,9 @@
                       <tr v-if="metadata.source">
                         <td>Source</td>
                         <td>
-                          <span :class="['source-badge', 
-                            metadata.source === 'claude' ? 'source-claude' : 
-                            metadata.source === 'pi-mono' ? 'source-pi-mono' : 
-                            'source-copilot']">
-                            {{ 
-                              metadata.source === 'claude' ? 'Claude Code' : 
-                              metadata.source === 'pi-mono' ? 'Pi-Mono' : 
-                              'GitHub Copilot' 
-                            }}
+                          <!-- Use backend-provided source metadata (Violation #3 fix) -->
+                          <span :class="['source-badge', metadata.sourceBadgeClass || 'source-copilot']">
+                            {{ metadata.sourceName || 'GitHub Copilot' }}
                           </span>
                         </td>
                       </tr>
