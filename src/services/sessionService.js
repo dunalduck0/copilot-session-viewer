@@ -1497,6 +1497,22 @@ class SessionService {
           _fileIndex: event._fileIndex
         });
 
+        // Insert assistant.message (for Timeline rendering)
+        expanded.push({
+          type: 'assistant.message',
+          id: assistantId,
+          timestamp,
+          parentId: event.parentId,
+          uuid: event.uuid,
+          data: {
+            message: messageText,
+            tools: event.data?.tools || []
+          },
+          _synthetic: true,
+          _turnNumber: turnCounter,
+          _fileIndex: event._fileIndex + 0.05
+        });
+
         // Insert tool events if they exist (already matched by _matchCopilotToolCalls)
         // Tools are attached to assistant event as data.tools array
         if (event.data?.tools && event.data.tools.length > 0) {
@@ -1595,6 +1611,21 @@ class SessionService {
           _synthetic: true,
           _turnNumber: turnCounter,
           _fileIndex: event._fileIndex
+        });
+
+        // Insert assistant.message (for Timeline rendering)
+        expanded.push({
+          type: 'assistant.message',
+          id: assistantId,
+          timestamp,
+          parentId: event.parentId,
+          data: {
+            message: messageText,
+            tools: event.data?.tools || []
+          },
+          _synthetic: true,
+          _turnNumber: turnCounter,
+          _fileIndex: event._fileIndex + 0.05
         });
 
         // Insert tool events if they exist (already matched by _matchClaudeToolResults)

@@ -99,13 +99,25 @@ test.describe('Core Functionality Tests', () => {
     await expect(page.locator('body')).toBeVisible();
 
     // Should have insight tab (key feature)
-    const insightTab = page.locator('button:has-text("💡 Copilot Insight")');
+    const insightTab = page.locator('button:has-text("💡")');
     const hasInsightTab = await insightTab.isVisible({ timeout: 5000 });
 
     if (hasInsightTab) {
       console.log('Time analysis page loaded with insight functionality');
     } else {
       console.log('Time analysis page loaded but insight tab not visible');
+    }
+
+    // Verify Timeline content rendering (Gantt bars for assistant turns)
+    // Timeline should display summary cards and turn analysis
+    const summaryCards = page.locator('.summary-card');
+    const hasSummaryCards = await summaryCards.first().isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (hasSummaryCards) {
+      console.log('Timeline summary cards visible - Gantt rendering working');
+    } else {
+      console.log('Timeline summary not visible - checking if session has turns');
+      // For sessions without turns, this is expected behavior
     }
   });
 

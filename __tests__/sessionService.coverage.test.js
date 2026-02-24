@@ -915,6 +915,7 @@ describe('SessionService - Coverage Enhancement', () => {
 
       expect(expanded.some(e => e.type === 'user.message')).toBe(true);
       expect(expanded.some(e => e.type === 'assistant.turn_start')).toBe(true);
+      expect(expanded.some(e => e.type === 'assistant.message')).toBe(true); // Timeline rendering dependency
       expect(expanded.some(e => e.type === 'assistant.turn_complete')).toBe(true);
     });
 
@@ -969,6 +970,7 @@ describe('SessionService - Coverage Enhancement', () => {
 
       expect(expanded.some(e => e.type === 'user.message')).toBe(true);
       expect(expanded.some(e => e.type === 'assistant.turn_start')).toBe(true);
+      expect(expanded.some(e => e.type === 'assistant.message')).toBe(true); // Timeline rendering dependency
       expect(expanded.some(e => e.type === 'tool.execution_start')).toBe(true);
       expect(expanded.some(e => e.type === 'tool.execution_complete')).toBe(true);
     });
