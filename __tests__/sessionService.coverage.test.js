@@ -525,7 +525,7 @@ describe('SessionService - Coverage Enhancement', () => {
       const events = [
         {
           id: 'msg-1',
-          type: 'message',
+          type: 'assistant.message',  // After normalization
           timestamp: '2026-02-20T10:00:00.000Z',
           data: {
             role: 'assistant',
@@ -538,14 +538,14 @@ describe('SessionService - Coverage Enhancement', () => {
         },
         {
           id: 'result-1',
-          type: 'message',
+          type: 'message',  // toolResult keeps 'message' type
           parentId: 'msg-1',
           timestamp: '2026-02-20T10:00:01.000Z',
           data: { role: 'toolResult', result: 'File content' }
         },
         {
           id: 'result-2',
-          type: 'message',
+          type: 'message',  // toolResult keeps 'message' type
           parentId: 'result-1',
           timestamp: '2026-02-20T10:00:02.000Z',
           data: { role: 'toolResult', result: 'Write success' }
@@ -574,7 +574,7 @@ describe('SessionService - Coverage Enhancement', () => {
       const events = [
         {
           id: 'msg-1',
-          type: 'message',
+          type: 'assistant.message',  // After normalization
           data: {
             role: 'assistant',
             tools: [
@@ -585,7 +585,7 @@ describe('SessionService - Coverage Enhancement', () => {
         },
         {
           id: 'result-1',
-          type: 'message',
+          type: 'message',  // toolResult keeps 'message' type
           parentId: 'msg-1',
           data: { role: 'toolResult', result: 'Only one result' }
         }
@@ -618,8 +618,8 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      // Pi-Mono keeps original type "message", preserves role in data
-      expect(normalized.type).toBe('message');
+      // Pi-Mono transforms to unified type "user.message"
+      expect(normalized.type).toBe('user.message');
       expect(normalized.data.role).toBe('user');
       expect(normalized.data.message).toBe('User message');
     });
@@ -638,8 +638,8 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      // Pi-Mono keeps original type "message", preserves role in data
-      expect(normalized.type).toBe('message');
+      // Pi-Mono transforms to unified type "assistant.message"
+      expect(normalized.type).toBe('assistant.message');
       expect(normalized.data.role).toBe('assistant');
       expect(normalized.data.message).toBe('Using tools');
       expect(normalized.data.tools).toHaveLength(1);
@@ -659,7 +659,7 @@ describe('SessionService - Coverage Enhancement', () => {
 
       const normalized = service._normalizeEvent(event, 'pi-mono');
 
-      // Pi-Mono keeps original type "message", preserves role in data
+      // Pi-Mono toolResult keeps type "message" - will be merged into assistant
       expect(normalized.type).toBe('message');
       expect(normalized.data.role).toBe('toolResult');
       expect(normalized.data.result).toBe('Tool output');

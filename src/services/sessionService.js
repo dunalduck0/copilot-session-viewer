@@ -522,6 +522,7 @@ class SessionService {
   /**
    * Merge Pi-Mono toolResult messages into their parent assistant messages
    * Pi-Mono has message events with role: user/assistant/toolResult
+   * After normalization: user.message, assistant.message, and message (toolResult only)
    * toolResult events are chained via parentId (first points to assistant, rest chain to previous)
    * @private
    */
@@ -530,8 +531,7 @@ class SessionService {
 
     // Find all assistant messages with tool calls
     events.forEach(assistantEvent => {
-      if (assistantEvent.type === 'message' && 
-          assistantEvent.data.role === 'assistant' && 
+      if (assistantEvent.type === 'assistant.message' &&  // After normalization
           assistantEvent.data.tools && 
           assistantEvent.data.tools.length > 0) {
         
@@ -778,12 +778,19 @@ class SessionService {
     }
 
     if (source === 'pi-mono') {
-      // Pi-Mono format normalization - KEEP ORIGINAL TYPE
+      // Pi-Mono format normalization - TRANSFORM TO UNIFIED TYPE
       if (event.type === 'message') {
         const { message } = event;
         
-        // Keep type as "message", preserve role in data
-        normalized.type = 'message';
+        // Transform type to unified format (like Copilot/Claude)
+        if (message.role === 'user') {
+          normalized.type = 'user.message';
+        } else if (message.role === 'assistant') {
+          normalized.type = 'assistant.message';
+        } else if (message.role === 'toolResult') {
+          // toolResult keeps 'message' type - will be merged by _mergePiMonoToolResults
+          normalized.type = 'message';
+        }
         normalized.data.role = message.role;
         
         // Extract text content
@@ -1082,7 +1089,7 @@ class SessionService {
 
   /**
    * Build Pi-Mono timeline from normalized events
-   * Pi-Mono uses user.message/assistant.message with embedded tools
+   * Pi-Mono uses user.message/assistant.message (unified with Copilot/Claude)
    * @private
    */
   _buildPiMonoTimeline(events, _session) {
@@ -1093,8 +1100,8 @@ class SessionService {
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
       
-      // Pi-Mono uses type="message" with data.role
-      if (event.type === 'message' && event.data.role === 'user') {
+      // After normalization, Pi-Mono uses unified type 'user.message'
+      if (event.type === 'user.message') {
         turnId++;
         const turn = {
           id: `turn-${turnId}`,
@@ -1109,10 +1116,10 @@ class SessionService {
         // Find all assistant responses until next user message
         let j = i + 1;
         let assistantId = 0;
-        while (j < events.length && !(events[j].type === 'message' && events[j].data.role === 'user')) {
+        while (j < events.length && events[j].type !== 'user.message') {
           const nextEvent = events[j];
           
-          if (nextEvent.type === 'message' && nextEvent.data.role === 'assistant') {
+          if (nextEvent.type === 'assistant.message') {
             assistantId++;
             turn.endTime = nextEvent.timestamp;
             
