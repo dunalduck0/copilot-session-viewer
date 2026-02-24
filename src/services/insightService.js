@@ -223,11 +223,16 @@ class InsightService {
       try {
         outputStream.end();
 
+        const stderr = Buffer.concat(stderrChunks).toString('utf-8').slice(0, MAX_STDERR);
+        console.log(`📋 ${toolConfig.name} process exited with code ${code}`);
+        if (stderr) {
+          console.log(`📋 ${toolConfig.name} stderr:`, stderr.substring(0, 500));
+        }
+
         if (code !== 0) {
-          const stderr = Buffer.concat(stderrChunks).toString('utf-8').slice(0, MAX_STDERR);
-          console.error(`❌ ${toolConfig.name} CLI failed:`, stderr);
+          console.error(`❌ ${toolConfig.name} CLI failed (code ${code}):`, stderr);
           await fs.writeFile(insightFile,
-            `# ❌ Generation Failed\n\n\`\`\`\n${stderr}\n\`\`\`\n`,
+            `# ❌ Generation Failed\n\nExit code: ${code}\n\n\`\`\`\n${stderr || '(no error output)'}\n\`\`\`\n`,
             'utf-8'
           );
         } else {
