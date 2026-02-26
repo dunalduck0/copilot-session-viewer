@@ -182,8 +182,8 @@ class SessionController {
       // Generate ETag from session ID + timestamp + pagination params (if used)
       const crypto = require('crypto');
       const etagBase = isPaginationRequested 
-        ? `${sessionId}-${session.updated || session.created}-${limit}-${offset}`
-        : `${sessionId}-${session.updated || session.created}`;
+        ? `${sessionId}-${session.updatedAt || session.createdAt}-${limit}-${offset}`
+        : `${sessionId}-${session.updatedAt || session.createdAt}`;
       const etag = crypto.createHash('md5').update(etagBase).digest('hex');
 
       // Check If-None-Match header (client cache)
@@ -248,7 +248,7 @@ class SessionController {
 
       // Set caching headers
       const crypto = require('crypto');
-      const etagBase = `${sessionId}-timeline-${session.updated || session.created}`;
+      const etagBase = `${sessionId}-timeline-${session.updatedAt || session.createdAt}`;
       const etag = crypto.createHash('md5').update(etagBase).digest('hex');
 
       res.set({
