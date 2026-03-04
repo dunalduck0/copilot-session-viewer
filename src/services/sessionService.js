@@ -159,12 +159,11 @@ class SessionService {
         const raw = await fs.promises.readFile(session.filePath, 'utf-8');
         let sessionJson;
         if (session.filePath.endsWith('.jsonl')) {
-          const firstLine = raw.split('\n').find(l => l.trim());
-          const wrapper = JSON.parse(firstLine);
-          sessionJson = wrapper.v || wrapper;
+          sessionJson = this.sessionRepository._parseVsCodeJsonl(raw);
         } else {
           sessionJson = JSON.parse(raw);
         }
+        if (!sessionJson) return [];
         const parsed = vscodeParser.parseVsCode(sessionJson);
         return parsed.allEvents;
       } catch (err) {

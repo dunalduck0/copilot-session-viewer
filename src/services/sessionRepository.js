@@ -459,9 +459,8 @@ class SessionRepository {
             const raw = await fs.readFile(fullPath, 'utf-8');
             let sessionJson;
             if (matchingFile.endsWith('.jsonl')) {
-              const firstLine = raw.split('\n').find(l => l.trim());
-              const wrapper = JSON.parse(firstLine);
-              sessionJson = wrapper.v || wrapper;
+              sessionJson = this._parseVsCodeJsonl(raw);
+              if (!sessionJson) continue;
             } else {
               sessionJson = JSON.parse(raw);
             }
@@ -484,7 +483,7 @@ class SessionRepository {
               updatedAt,
               summary: userText ? userText.slice(0, 120) : `VSCode chat (${requests.length} requests)`,
               hasEvents: true,
-              eventCount: 1 + requests.length * 3,
+              eventCount: requests.reduce((s, r) => s + (r.response || []).length, 0) + requests.length * 2 + 1,
               duration: updatedAt - createdAt,
               sessionStatus: 'completed',
               model: firstReq.modelId || null,
@@ -740,6 +739,36 @@ class SessionRepository {
    * @private
    */
   /** Resolve the real project/workspace path from a VSCode workspaceStorage hash directory */
+  /** Parse a VSCode .jsonl file: read kind=0 for base state, merge kind=2 patches into response arrays */
+  _parseVsCodeJsonl(raw) {
+    const lines = raw.split('\n').filter(l => l.trim());
+    if (lines.length === 0) return null;
+
+    const first = JSON.parse(lines[0]);
+    const sessionJson = first.v || first; // kind=0 wraps in .v
+
+    // Merge kind=2 patches (response item arrays) into requests
+    // VSCode appends response items as kind=2 patches referencing the request index
+    for (let i = 1; i < lines.length; i++) {
+      try {
+        const patch = JSON.parse(lines[i]);
+        if (patch.kind === 2 && Array.isArray(patch.v)) {
+          // kind=2 v is an array of response items to append to the last/current request
+          const requests = sessionJson.requests;
+          if (requests && requests.length > 0) {
+            const lastReq = requests[requests.length - 1];
+            if (!lastReq.response) lastReq.response = [];
+            lastReq.response.push(...patch.v);
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+
+    return sessionJson;
+  }
+
   async _resolveVsCodeWorkspacePath(workspaceHashDir) {
     try {
       const workspaceJsonPath = path.join(workspaceHashDir, 'workspace.json');
@@ -794,13 +823,11 @@ class SessionRepository {
       try {
         const stats = await fs.stat(fullPath);
         const raw = await fs.readFile(fullPath, 'utf-8');
-        // Support both .json (flat) and .jsonl (incremental patch: kind=0 is initial state)
+        // Support both .json (flat) and .jsonl (incremental patch: kind=0 + kind=2 patches)
         let sessionJson;
         if (file.endsWith('.jsonl')) {
-          const firstLine = raw.split('\n').find(l => l.trim());
-          if (!firstLine) continue;
-          const wrapper = JSON.parse(firstLine);
-          sessionJson = wrapper.v || wrapper; // kind=0 wraps session in .v
+          sessionJson = this._parseVsCodeJsonl(raw);
+          if (!sessionJson) continue;
         } else {
           sessionJson = JSON.parse(raw);
         }
@@ -838,7 +865,7 @@ class SessionRepository {
             updatedAt,
             summary: userText ? userText.slice(0, 120) : `VSCode chat (${requests.length} requests)`,
             hasEvents: true,
-            eventCount: 1 + requests.length * 3,
+            eventCount: requests.reduce((s, r) => s + (r.response || []).length, 0) + requests.length * 2 + 1,
             duration: updatedAt - createdAt,
             sessionStatus: 'completed',
             model,
