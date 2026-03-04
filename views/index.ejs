@@ -495,10 +495,7 @@
         <div id="importStatus" class="import-status"></div>
         <div id="sessions-container"></div>
 
-        <!-- Load more button and loading indicator -->
-        <div id="load-more-section" style="text-align: center; margin-top: 20px; display: none;">
-          <button id="load-more-btn" class="load-more-btn">Load More Sessions</button>
-        </div>
+                <!-- Loading indicator for infinite scroll -->
         <div id="loading-indicator" style="text-align: center; margin-top: 20px; display: none;">
           <div class="loading-spinner">Loading more sessions...</div>
         </div>
@@ -519,48 +516,54 @@
 
     // Infinite scroll state — per-source
     let allSessions = [...initialSessions];
-    let currentOffset = initialSessions.length;
-    let hasMore = hasMoreFromServer;
+    // Per-source pagination state
+    const sourceState = {};
+    // Initialize from initial server load (copilot is default active pill)
+    sourceState['copilot'] = { offset: initialSessions.filter(s => s.source === 'copilot').length, hasMore: hasMoreFromServer };
+
     let isLoading = false;
 
     // Filter state
     let currentSourceFilter = 'copilot';
-    // Load more sessions (source-agnostic, same as other pills)
+
+    function currentState() {
+      if (!sourceState[currentSourceFilter]) {
+        sourceState[currentSourceFilter] = { offset: 0, hasMore: true };
+      }
+      return sourceState[currentSourceFilter];
+    }
+
+    // Load more sessions for current source
     async function loadMoreSessions() {
-      if (isLoading || !hasMore) return;
+      const state = currentState();
+      if (isLoading || !state.hasMore) return;
 
       isLoading = true;
-      const loadMoreSection = document.getElementById('load-more-section');
       const loadingIndicator = document.getElementById('loading-indicator');
-
-      loadMoreSection.style.display = 'none';
       loadingIndicator.style.display = 'block';
 
       try {
-        const response = await fetch(`/api/sessions/load-more?offset=${currentOffset}&limit=20`);
+        const response = await fetch(`/api/sessions/load-more?offset=${currentState().offset}&limit=20&source=${encodeURIComponent(currentSourceFilter)}`);
         if (!response.ok) throw new Error('Failed to load more sessions');
 
         const data = await response.json();
-        allSessions.push(...data.sessions);
-        currentOffset += data.sessions.length;
-        hasMore = data.hasMore;
+        const existingIds = new Set(allSessions.map(s => s.id));
+        for (const s of data.sessions) {
+          if (!existingIds.has(s.id)) allSessions.push(s);
+        }
+        currentState().offset += data.sessions.length;
+        currentState().hasMore = data.hasMore;
 
         renderAllSessions();
-        updateLoadMoreButton();
       } catch (err) {
         console.error('Error loading more sessions:', err);
-        loadMoreSection.style.display = state.hasMore ? 'block' : 'none';
       } finally {
         isLoading = false;
         loadingIndicator.style.display = 'none';
       }
     }
 
-    // Update load more button visibility
-    function updateLoadMoreButton() {
-      const loadMoreSection = document.getElementById('load-more-section');
-      loadMoreSection.style.display = hasMore && !isLoading ? 'block' : 'none';
-    }
+    // (load more button removed — pure infinite scroll)
 
     // Get filtered sessions based on current filter
     function getFilteredSessions() {
@@ -855,19 +858,25 @@
           pill.classList.add('active');
           currentSourceFilter = pill.getAttribute('data-source');
 
-          // If no sessions loaded for this source yet, fetch first batch filtered by source
+          // Init per-source state if first visit
+          if (!sourceState[currentSourceFilter]) {
+            sourceState[currentSourceFilter] = { offset: 0, hasMore: true };
+          }
+
+          // Fetch first batch if none loaded for this source yet
           const hasSourceSessions = allSessions.some(s => s.source === currentSourceFilter);
           if (!hasSourceSessions && !isLoading) {
             isLoading = true;
             try {
-              const resp = await fetch(`/api/sessions?source=${encodeURIComponent(currentSourceFilter)}&limit=20`);
+              const resp = await fetch(`/api/sessions/load-more?offset=0&limit=20&source=${encodeURIComponent(currentSourceFilter)}`);
               if (resp.ok) {
                 const data = await resp.json();
-                const fetched = data.sessions || (Array.isArray(data) ? data : []);
                 const existingIds = new Set(allSessions.map(s => s.id));
-                for (const s of fetched) {
+                for (const s of (data.sessions || [])) {
                   if (!existingIds.has(s.id)) allSessions.push(s);
                 }
+                sourceState[currentSourceFilter].offset = (data.sessions || []).length;
+                sourceState[currentSourceFilter].hasMore = data.hasMore;
               }
             } catch (e) {
               console.error('Failed to load sessions for source:', currentSourceFilter, e);
@@ -877,22 +886,16 @@
           }
 
           renderAllSessions();
-          updateLoadMoreButton();
         });
       });
     }
 
     // Render grouped sessions
     document.addEventListener('DOMContentLoaded', function() {
-      // Initial render
       renderAllSessions();
-      updateLoadMoreButton();
 
-      // Add scroll listener for infinite scroll
+      // Infinite scroll
       window.addEventListener('scroll', throttledScroll);
-
-      // Add click listener for load more button
-      document.getElementById('load-more-btn').addEventListener('click', loadMoreSessions);
 
       // Setup filter pills
       setupFilterPills();
@@ -907,7 +910,6 @@
       margin-top: 32px;
       margin-bottom: 16px;
       padding-bottom: 8px;
-      border-bottom: 2px solid #21262d;
     }
     .date-group-header:first-child {
       margin-top: 0;
