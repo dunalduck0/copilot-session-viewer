@@ -447,7 +447,7 @@ class SessionRepository {
         const chatSessionsDir = path.join(workspaceStorageDir, hash, 'chatSessions');
         try {
           const files = await fs.readdir(chatSessionsDir);
-          const matchingFile = files.find(f => f === `${sessionId}.json` || f.replace('.json', '') === sessionId);
+          const matchingFile = files.find(f => f === `${sessionId}.json` || f === `${sessionId}.jsonl` || f.replace(/\.jsonl?$/, '') === sessionId);
           if (matchingFile) {
             const fullPath = path.join(chatSessionsDir, matchingFile);
             const stats = await fs.stat(fullPath);
@@ -736,7 +736,7 @@ class SessionRepository {
     }
 
     const entries = await fs.readdir(chatSessionsDir);
-    const jsonFiles = entries.filter(e => e.endsWith('.json') && !shouldSkipEntry(e));
+    const jsonFiles = entries.filter(e => (e.endsWith('.json') || e.endsWith('.jsonl')) && !shouldSkipEntry(e));
     if (jsonFiles.length === 0) return [];
 
     const sessions = [];
@@ -745,9 +745,18 @@ class SessionRepository {
       try {
         const stats = await fs.stat(fullPath);
         const raw = await fs.readFile(fullPath, 'utf-8');
-        const sessionJson = JSON.parse(raw);
+        // Support both .json (flat) and .jsonl (incremental patch: kind=0 is initial state)
+        let sessionJson;
+        if (file.endsWith('.jsonl')) {
+          const firstLine = raw.split('\n').find(l => l.trim());
+          if (!firstLine) continue;
+          const wrapper = JSON.parse(firstLine);
+          sessionJson = wrapper.v || wrapper; // kind=0 wraps session in .v
+        } else {
+          sessionJson = JSON.parse(raw);
+        }
 
-        const sessionId = sessionJson.sessionId || path.basename(file, '.json');
+        const sessionId = sessionJson.sessionId || path.basename(file).replace(/\.jsonl?$/, '');
         const requests = sessionJson.requests || [];
         if (requests.length === 0) continue;
 
