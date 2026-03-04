@@ -748,32 +748,54 @@ class SessionRepository {
     const first = JSON.parse(lines[0]);
     const sessionJson = first.v || first; // kind=0 wraps in .v
 
-    // Merge kind=2 patches (response item arrays) into requests
-    // k = ['requests', N, 'response'] → target request index N
-    // i = null → append; i = number → splice insert at that index
+    // Apply kind=1 (field set) and kind=2 (array splice) patches
     for (let idx = 1; idx < lines.length; idx++) {
       try {
         const patch = JSON.parse(lines[idx]);
-        if (patch.kind === 2 && Array.isArray(patch.v)) {
-          const requests = sessionJson.requests;
-          if (!requests || requests.length === 0) continue;
+        const k = patch.k || [];
+        const v = patch.v;
 
-          // Determine target request index from k field
-          // k format: ['requests', <reqIndex>, 'response']
-          let reqIndex = requests.length - 1; // default: last request
-          if (Array.isArray(patch.k) && patch.k[0] === 'requests' && typeof patch.k[1] === 'number') {
-            reqIndex = patch.k[1];
+        if (patch.kind === 2 && Array.isArray(v)) {
+          // Navigate to parent object, then splice into the target array
+          let obj = sessionJson;
+          for (let ki = 0; ki < k.length - 1; ki++) {
+            const key = k[ki];
+            if (typeof key === 'number') {
+              obj = obj[key];
+            } else {
+              if (!obj[key]) obj[key] = {};
+              obj = obj[key];
+            }
           }
-          const req = requests[reqIndex];
-          if (!req) continue;
-          if (!req.response) req.response = [];
-
-          const insertAt = patch.i; // null = append, number = splice insert
-          if (insertAt === null || insertAt === undefined) {
-            req.response.push(...patch.v);
+          const lastKey = k[k.length - 1];
+          if (lastKey !== undefined) {
+            if (!obj[lastKey]) obj[lastKey] = [];
+            const target = obj[lastKey];
+            const i = patch.i;
+            if (i === null || i === undefined) {
+              target.push(...v);
+            } else {
+              target.splice(i, 0, ...v);
+            }
           } else {
-            req.response.splice(insertAt, 0, ...patch.v);
+            // k is empty — splice into sessionJson itself (rare)
+            const i = patch.i;
+            if (i === null || i === undefined) sessionJson.push?.(...v);
           }
+        } else if (patch.kind === 1 && k.length > 0) {
+          // Navigate to parent, set the final key
+          let obj = sessionJson;
+          for (let ki = 0; ki < k.length - 1; ki++) {
+            const key = k[ki];
+            if (typeof key === 'number') {
+              obj = obj[key];
+            } else {
+              if (!obj[key]) obj[key] = {};
+              obj = obj[key];
+            }
+          }
+          const lastKey = k[k.length - 1];
+          obj[lastKey] = v;
         }
       } catch {
         // Skip malformed lines
