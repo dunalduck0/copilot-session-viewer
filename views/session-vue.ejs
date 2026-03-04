@@ -1323,6 +1323,15 @@
             }
           }
 
+          // 6. Attribute tool.invocation events (VS Code format) via parentToolCallId
+          for (const ev of sorted) {
+            if (ev.type !== 'tool.invocation') continue;
+            const ptcid = ev.data?.parentToolCallId;
+            if (ptcid && subagentInfo.has(ptcid)) {
+              ownerMap.set(ev.stableId, ptcid);
+            }
+          }
+
           return { ownerMap, subagentInfo };
         });
 
