@@ -168,11 +168,20 @@ class SessionController {
         return res.status(404).json({ error: 'Session not found' });
       }
 
-      // Generate ETag from session ID + timestamp + pagination params (if used)
+      // Generate ETag from session ID + file mtime (always fresh, no 304 for active sessions)
       const crypto = require('crypto');
+      const fs = require('fs');
+      let mtimeMs = session.updatedAt ? new Date(session.updatedAt).getTime() : Date.now();
+      // Re-stat the actual file to get the latest mtime (avoids stale ETag for active sessions)
+      try {
+        if (session.filePath) {
+          const fileStat = fs.statSync(session.filePath);
+          mtimeMs = fileStat.mtimeMs;
+        }
+      } catch (_e) { /* ignore */ }
       const etagBase = isPaginationRequested 
-        ? `${sessionId}-${session.updatedAt || session.createdAt}-${limit}-${offset}`
-        : `${sessionId}-${session.updatedAt || session.createdAt}`;
+        ? `${sessionId}-${mtimeMs}-${limit}-${offset}`
+        : `${sessionId}-${mtimeMs}`;
       const etag = crypto.createHash('md5').update(etagBase).digest('hex');
 
       // Check If-None-Match header (client cache)
