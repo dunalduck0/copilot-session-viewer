@@ -1053,6 +1053,7 @@
     }
     .event.event-in-subagent { border-left-color: var(--subagent-border-color, #58a6ff); }
     .subagent-owner-tag { font-size: 11px; padding: 1px 6px; border-radius: 8px; border: 1px solid; white-space: nowrap; opacity: 0.85; }
+    .subagent-name-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid; white-space: nowrap; font-weight: 600; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
   </style>
 </head>
 <body>
@@ -2706,14 +2707,18 @@
                       :style="getSubagentColor(item) ? { '--subagent-border-color': getSubagentColor(item) } : {}"
                     >
                       <div class="event-header">
-                        <span :class="['event-badge', getBadgeInfo(item.type, item).class]">
-                          {{ getBadgeInfo(item.type, item).label }}
-                        </span>
-                        <span
-                          v-if="getSubagentInfo(item)"
-                          class="subagent-owner-tag"
-                          :style="{ color: getSubagentColor(item), borderColor: getSubagentColor(item) }"
-                        >🤖 {{ getSubagentInfo(item).name }}</span>
+                        <!-- If this event belongs to a subagent, show subagent name as the badge -->
+                        <template v-if="getSubagentInfo(item)">
+                          <span
+                            class="event-badge subagent-name-badge"
+                            :style="{ background: getSubagentColor(item) + '22', color: getSubagentColor(item), borderColor: getSubagentColor(item) }"
+                          >🤖 {{ getSubagentInfo(item).name }}</span>
+                        </template>
+                        <template v-else>
+                          <span :class="['event-badge', getBadgeInfo(item.type, item).class]">
+                            {{ getBadgeInfo(item.type, item).label }}
+                          </span>
+                        </template>
                         <span class="event-timestamp">{{ formatTime(item.timestamp) }}</span>
                       </div>
                       
