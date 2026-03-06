@@ -2508,7 +2508,7 @@
                         </td>
                       </tr>
                       <tr v-if="metadata.copilotVersion">
-                        <td>CLI Version</td>
+                        <td>Version</td>
                         <td>{{ metadata.copilotVersion }}</td>
                       </tr>
                       <tr v-if="metadata.model">
@@ -2523,13 +2523,9 @@
                         <td>Branch</td>
                         <td>{{ metadata.branch }}</td>
                       </tr>
-                      <tr v-if="metadata.model">
-                        <td>Model</td>
-                        <td>{{ metadata.model }}</td>
-                      </tr>
                       <tr v-if="metadata.cwd">
                         <td>Repo</td>
-                        <td>{{ repoBasename(metadata.cwd) }}</td>
+                        <td>{{ metadata.cwd }}</td>
                       </tr>
                       <tr v-if="metadata.created">
                         <td>Created</td>
