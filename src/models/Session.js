@@ -123,10 +123,10 @@ class Session {
    */
   _getSourceDisplayMetadata(source) {
     const metadata = {
-      'copilot': { name: 'Copilot', badgeClass: 'source-copilot' },
+      'copilot': { name: 'Copilot CLI', badgeClass: 'source-copilot' },
       'claude': { name: 'Claude', badgeClass: 'source-claude' },
       'pi-mono': { name: 'Pi', badgeClass: 'source-pi-mono' },
-      'vscode': { name: 'VSCode', badgeClass: 'source-vscode' }
+      'vscode': { name: 'Copilot Chat', badgeClass: 'source-vscode' }
     };
     return metadata[source] || { name: source, badgeClass: 'source-unknown' };
   }

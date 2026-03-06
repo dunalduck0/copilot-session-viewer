@@ -154,7 +154,7 @@ test.describe('Unified Event Format', () => {
     
     const testSessions = [
       { id: 'b353bbf8-06c2-41c9-b60a-43ea6c3bb853', name: 'Pi-Mono' },
-      { id: 'dafe98e6-fcd0-491d-91a8-d746e8479277', name: 'Copilot' },
+      { id: 'dafe98e6-fcd0-491d-91a8-d746e8479277', name: 'Copilot CLI' },
       { id: '5becf8b0-9e22-40c1-a70a-0ee38b887c58', name: 'Claude' }
     ];
     
