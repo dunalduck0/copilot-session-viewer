@@ -2516,9 +2516,13 @@
                         <td>Branch</td>
                         <td>{{ metadata.branch }}</td>
                       </tr>
+                      <tr v-if="metadata.model">
+                        <td>Model</td>
+                        <td>{{ metadata.model }}</td>
+                      </tr>
                       <tr v-if="metadata.cwd">
-                        <td>CWD</td>
-                        <td>{{ metadata.cwd }}</td>
+                        <td>Repo</td>
+                        <td>{{ metadata.cwd.replace(/.*\/([^/]+)\/?$/, '$1') || metadata.cwd }}</td>
                       </tr>
                       <tr v-if="metadata.created">
                         <td>Created</td>

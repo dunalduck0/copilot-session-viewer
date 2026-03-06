@@ -20,31 +20,30 @@ class SessionRepository {
     } else if (Array.isArray(sessionDirs)) {
       this.sources = sessionDirs;
     } else {
-      // Default: Copilot + Claude + Pi-Mono
+      // Default: Copilot + Claude + Pi-Mono + VSCode
       // Support environment variables for each source (useful for testing/CI)
       this.sources = [
         {
           type: 'copilot',
-          dir: process.env.COPILOT_SESSION_DIR || 
+          dir: process.env.COPILOT_SESSION_DIR ||
                process.env.SESSION_DIR || // Legacy fallback
                path.join(os.homedir(), '.copilot', 'session-state')
         },
         {
           type: 'claude',
-          dir: process.env.CLAUDE_SESSION_DIR || 
+          dir: process.env.CLAUDE_SESSION_DIR ||
                path.join(os.homedir(), '.claude', 'projects')
         },
         {
           type: 'pi-mono',
-          dir: process.env.PI_MONO_SESSION_DIR || 
+          dir: process.env.PI_MONO_SESSION_DIR ||
                path.join(os.homedir(), '.pi', 'agent', 'sessions')
         },
-        // TODO: VSCode parser disabled
-        // {
-        //   type: 'vscode',
-        //   dir: process.env.VSCODE_WORKSPACE_STORAGE_DIR ||
-        //        path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'workspaceStorage')
-        // }
+        {
+          type: 'vscode',
+          dir: process.env.VSCODE_WORKSPACE_STORAGE_DIR ||
+               path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'workspaceStorage')
+        }
       ];
     }
     
@@ -111,10 +110,11 @@ class SessionRepository {
           if (stats.isDirectory()) {
             return this._scanPiMonoDir(fullPath, entry);
           }
-        // } else if (source.type === 'vscode') { // TODO: VSCode disabled
-        //   if (stats.isDirectory()) {
-        //     return this._scanVsCodeWorkspaceDir(fullPath);
-        //   }
+        } else if (source.type === 'vscode') {
+          // VSCode: workspace hash directories containing chatSessions/*.jsonl
+          if (stats.isDirectory()) {
+            return this._scanVsCodeWorkspaceDir(fullPath);
+          }
         }
         return null;
       });
@@ -274,8 +274,8 @@ class SessionRepository {
         session = await this._findClaudeSession(sessionId, source.dir);
       } else if (source.type === 'pi-mono') {
         session = await this._findPiMonoSession(sessionId, source.dir);
-      // } else if (source.type === 'vscode') { // TODO: VSCode disabled
-      //   session = await this._findVsCodeSession(sessionId, source.dir);
+      } else if (source.type === 'vscode') {
+        session = await this._findVsCodeSession(sessionId, source.dir);
       }
 
       if (session) return session;
@@ -845,6 +845,9 @@ class SessionRepository {
       return []; // No chatSessions subfolder — skip silently
     }
 
+    // Extract workspace hash from directory name
+    const workspaceHash = path.basename(workspaceHashDir);
+
     // Resolve the real project path from workspace.json
     const realWorkspacePath = await this._resolveVsCodeWorkspacePath(workspaceHashDir);
 
@@ -896,6 +899,7 @@ class SessionRepository {
           {
             source: 'vscode',
             filePath: fullPath,
+            workspaceHash, // Include workspace hash in metadata
             createdAt,
             updatedAt,
             summary: userText ? userText.slice(0, 120) : `VSCode chat (${requests.length} requests)`,
@@ -903,7 +907,7 @@ class SessionRepository {
             eventCount: requests.reduce((s, r) => s + (r.response || []).length, 0) + requests.length * 2 + 1,
             duration: updatedAt - createdAt,
             sessionStatus: 'completed',
-            model,
+            selectedModel: model,
             agentId,
             toolCount,
             workspace: { cwd: realWorkspacePath || workspaceHashDir },

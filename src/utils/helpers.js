@@ -15,7 +15,7 @@ function buildMetadata(session) {
     sourceName: json.sourceName || session.source,
     sourceBadgeClass: json.sourceBadgeClass || 'source-unknown',
     summary: session.summary,
-    model: session.model,
+    model: session.selectedModel || session.model,
     repo: session.workspace?.repository,
     branch: session.workspace?.branch,
     cwd: session.workspace?.cwd,
