@@ -758,6 +758,7 @@
     .badge-subagent { background: #8957e5; color: #fff; }
     .badge-skill { background: #bf3989; color: #fff; }
     .badge-session { background: #6e7681; color: #fff; }
+    .badge-system { background: #444c56; color: #adbac7; font-style: italic; }
     .badge-truncation { background: #e5534b; color: #fff; }
     .badge-compaction { background: #c2442d; color: #fff; }
     .badge-error { background: #da3633; color: #fff; }
@@ -1680,6 +1681,9 @@
           }
           if (type === 'session.compaction_start' || type === 'session.compaction_complete') {
             return { label: 'COMPACTION', class: 'badge-compaction' };
+          }
+          if (type === 'system.notification') {
+            return { label: 'SYSTEM', class: 'badge-system' };
           }
           
           const parts = (type || '').split('.');
@@ -2791,6 +2795,10 @@
                       </div>
 
                       <!-- Session truncation: show token/message removal info -->
+                      <div v-else-if="item.type === 'system.notification'" class="event-content" style="opacity:0.7">
+                        <span>{{ item.data?.message }}</span>
+                      </div>
+
                       <div v-else-if="item.type === 'session.truncation'" class="event-content">
                         <div v-if="item.data?.messagesRemovedDuringTruncation"><strong>Messages removed:</strong> {{ item.data.messagesRemovedDuringTruncation }}</div>
                         <div v-if="item.data?.tokensRemovedDuringTruncation"><strong>Tokens removed:</strong> {{ item.data.tokensRemovedDuringTruncation.toLocaleString() }}</div>

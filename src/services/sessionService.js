@@ -814,6 +814,11 @@ class SessionService {
       normalized.data.badgeClass = 'badge-session';
       return;
     }
+    if (type === 'system.notification') {
+      normalized.data.badgeLabel = 'SYSTEM';
+      normalized.data.badgeClass = 'badge-system';
+      return;
+    }
     
     // Extract category from type (e.g., 'user.message' → 'user')
     const parts = (type || '').split('.');
@@ -847,8 +852,17 @@ class SessionService {
 
     if (source === 'copilot') {
       // Copilot format normalization
-      
-      // Old format: request/response → user/assistant
+
+      // system-sourced user.message → system.notification (separate type for display)
+      if (event.type === 'user.message' && event.data?.source === 'system') {
+        normalized.type = 'system.notification';
+        // Extract text from <system_notification>...</system_notification> tag if present
+        const raw = event.data.content || event.data.message || '';
+        const match = raw.match(/<system_notification>([\s\S]*?)<\/system_notification>/);
+        normalized.data.message = match ? match[1].trim() : raw.trim();
+        this._generateBadgeInfo(normalized);
+        return normalized;
+      }
       if (event.type === 'request') {
         normalized.type = 'user';
         // Extract message from payload.messages (Anthropic API format)
