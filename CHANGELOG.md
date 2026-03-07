@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tag Isolation** - Tags now use filePath-based storage to prevent shared directory collisions (Claude, Pi-Mono, Copilot CLI)
 - **Per-Session Insight Files** - Agent review files use `{sessionId}.agent-review.md` naming to avoid collisions
 - **Export All Sources** - Session export works for all sources including VSCode; file-based exports include `.tags.json`
-- **E2E Test Cleanup** - Autocomplete test properly cleans up tags; selector/assertion fixes for new source UI
+- **Inline References in Markdown** - VSCode `inlineReference` items (file/folder links) now rendered as code references instead of being silently dropped, fixing broken markdown tables
 
 ### Performance
 - **60s Cache + Request Dedup** - `SessionRepository.findAll()` results cached for 60 seconds with concurrent request deduplication, reducing TTFB from ~11s to <100ms on cache hit
