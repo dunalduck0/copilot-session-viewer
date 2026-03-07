@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-07
+
+### Added
+- **VSCode Copilot Chat Support** - Full support for VSCode Copilot Chat sessions as a new source (`vscode`)
+  - Session cards show model badge + repo basename
+  - Copilot Chat extension version badge
+  - WIP badge for active sessions
+  - SubAgent name badges on assistant messages (replaces generic ASSISTANT badge)
+  - UserReq rows in Gantt timeline
+  - Turn divider shows start time + duration
+- **Dynamic Source Path Hints** - Clicking filter pills shows the source directory path (cross-platform)
+- **Multi-Tool Branding** - Homepage wording updated to reflect multi-tool support (Copilot CLI, Claude Code, Pi-Mono, Copilot Chat)
+
+### Changed
+- **Source Display Names** - `copilot` → "Copilot CLI", `vscode` → "Copilot Chat"
+- **Session Info Layout** - Shows Model + Repo basename instead of CWD hash path
+- **Tool Input Display** - URI objects simplified to filename only; edits collapsed to count
+- **Tool Call Width** - Truncation increased to 200 chars with flex-wrap
+- **SubAgent Badge** - Shows name only (no emoji prefix)
+- **System Messages** - System-sourced `user.message` converted to `system.notification` type with SYSTEM badge
+
+### Fixed
+- Claude `tool_result` user messages filtered from display
+- VSCode parser: `resultDetails` iteration crash, request timestamps for subagent events
+- VSCode subagent dedup by `subAgentId` instead of name
+- VSCode `findById` uses `selectedModel` + `resolveWorkspacePath`
+- VSCode duration estimation fix
+- Session detail repo dedup, skill table width
+- SESSION INFO duplicate Model/label
+- SubAgent badge uses `agentName` from `toolSpecificData`
+- Source path hints from server (cross-platform Windows/macOS/Linux)
+
 ## [0.2.7] - 2026-03-05
 
 ### Added
