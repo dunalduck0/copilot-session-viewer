@@ -954,13 +954,8 @@
       });
     }
 
-    // Source directory hints
-    const sourceHints = {
-      copilot: '~/.copilot/session-state/',
-      vscode: '~/Library/Application Support/Code/User/workspaceStorage/',
-      claude: '~/.claude/projects/',
-      'pi-mono': '~/.pi/agent/sessions/'
-    };
+    // Source directory hints (from server, platform-aware)
+    const sourceHints = <%- sourceHints || '{}' %>;
 
     function updateSourceHint(source) {
       const hint = document.getElementById('sourceHint');

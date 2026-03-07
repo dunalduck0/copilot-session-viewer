@@ -15,11 +15,29 @@ class SessionController {
       // Only load default pill (copilot) first 20 sessions
       const paginationData = await this.sessionService.getPaginatedSessions(1, 20, 'copilot');
 
+      // Build source path hints from repository config
+      const sourceHints = {};
+      if (this.sessionService.sessionRepository && this.sessionService.sessionRepository.sources) {
+        for (const src of this.sessionService.sessionRepository.sources) {
+          // Replace home dir with ~ for display
+          const home = require('os').homedir();
+          let displayPath = src.dir;
+          if (displayPath.startsWith(home)) {
+            displayPath = '~' + displayPath.slice(home.length);
+          }
+          // Normalize path separators for display
+          displayPath = displayPath.replace(/\\/g, '/');
+          if (!displayPath.endsWith('/')) displayPath += '/';
+          sourceHints[src.type] = displayPath;
+        }
+      }
+
       // Pass data for infinite scroll
       const templateData = {
         sessions: paginationData.sessions,
         hasMore: paginationData.hasNextPage,
-        totalSessions: paginationData.totalSessions
+        totalSessions: paginationData.totalSessions,
+        sourceHints: JSON.stringify(sourceHints)
       };
 
       res.render('index', templateData);
