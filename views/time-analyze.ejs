@@ -2027,8 +2027,57 @@
           // Check if this is a VS Code session and use sequence-based layout
           if (isVSCodeSession.value) {
             const vsAgents = vsCodeSubagents.value;
-            if (vsAgents.length > 0) {
-              // For VS Code sessions, build sequence-based timeline items
+            
+            // Collect user messages for user-req rows
+            const userMessages = sorted.filter(e => e.type === 'user.message');
+            
+            if (userMessages.length > 0 && vsAgents.length > 0) {
+              // Build user-req groups: each user message owns the subagents that follow it
+              // until the next user message
+              for (let ui = 0; ui < userMessages.length; ui++) {
+                const userMsg = userMessages[ui];
+                const nextUserMsg = userMessages[ui + 1];
+                const userIdx = userMsg._fileIndex || 0;
+                const nextIdx = nextUserMsg ? (nextUserMsg._fileIndex || Infinity) : Infinity;
+                
+                // Find subagents belonging to this user request
+                const reqAgents = vsAgents.filter(sa => 
+                  sa.firstIndex >= userIdx && sa.firstIndex < nextIdx
+                );
+                
+                // Calculate total tool count for this user request
+                const totalTools = reqAgents.reduce((s, a) => s + a.toolCount, 0);
+                
+                const msg = userMsg.data?.message || userMsg.data?.content || '';
+                
+                // Push user-req header
+                items.push({
+                  rowType: 'user-req',
+                  userReqNumber: ui + 1,
+                  message: typeof msg === 'string' ? msg.substring(0, 120) : String(msg).substring(0, 120),
+                  toolCount: totalTools,
+                  sequenceIndex: userIdx,
+                  isSequenceEstimated: true,
+                  duration: totalTools, // pseudo-duration based on tool count
+                });
+                
+                // Push subagent rows under this user request
+                for (const vsAgent of reqAgents) {
+                  items.push({
+                    rowType: 'subagent',
+                    itemType: 'subagent',
+                    name: vsAgent.name,
+                    status: vsAgent.status,
+                    toolCount: vsAgent.toolCount,
+                    sequenceIndex: vsAgent.firstIndex,
+                    isSequenceEstimated: true,
+                    duration: vsAgent.toolCount,
+                    indented: true, // indent under user-req
+                  });
+                }
+              }
+            } else if (vsAgents.length > 0) {
+              // No user messages, just show subagents
               for (const vsAgent of vsAgents) {
                 items.push({
                   rowType: 'subagent',
@@ -2037,9 +2086,8 @@
                   status: vsAgent.status,
                   toolCount: vsAgent.toolCount,
                   sequenceIndex: vsAgent.firstIndex,
-                  isSequenceEstimated: true, // Flag for special rendering
-                  // No real start/end times for VS Code
-                  duration: vsAgent.toolCount, // Use tool count as pseudo-duration
+                  isSequenceEstimated: true,
+                  duration: vsAgent.toolCount,
                 });
               }
             }
@@ -2148,18 +2196,45 @@
           const items = unifiedTimelineItems.value;
           if (items.length === 0) return { left: '0%', width: '0%' };
 
+          // For user-req rows, span across all its child subagent rows
+          if (item.rowType === 'user-req') {
+            const idx = items.findIndex(it => it === item);
+            if (idx === -1) return { left: '0%', width: '0%' };
+            
+            // Find child subagents (indented rows immediately following this user-req)
+            const children = [];
+            for (let i = idx + 1; i < items.length; i++) {
+              if (items[i].rowType === 'user-req') break; // next user-req
+              if (items[i].rowType === 'subagent') children.push(items[i]);
+            }
+            if (children.length === 0) return { left: '0%', width: '0%' };
+            
+            const firstPos = ganttSequencePosition(children[0]);
+            const lastPos = ganttSequencePosition(children[children.length - 1]);
+            const startPct = parseFloat(firstPos.left);
+            const endPct = parseFloat(lastPos.left) + parseFloat(lastPos.width);
+            return {
+              left: startPct + '%',
+              width: (endPct - startPct) + '%'
+            };
+          }
+
           // Find index of this item
           const idx = items.findIndex(it => it === item);
           if (idx === -1) return { left: '0%', width: '0%' };
 
-          // Calculate total tool count across all items
-          const totalToolCount = items.reduce((sum, it) => sum + (it.toolCount || 0), 0);
+          // Calculate total tool count across subagent items only (exclude user-req)
+          const subagentItems = items.filter(it => it.rowType !== 'user-req');
+          const totalToolCount = subagentItems.reduce((sum, it) => sum + (it.toolCount || 0), 0);
           if (totalToolCount === 0) return { left: '0%', width: '0%' };
 
-          // Calculate cumulative tool count up to this item
+          // Calculate cumulative tool count up to this item (among subagent items only)
+          const subIdx = subagentItems.findIndex(it => it === item);
+          if (subIdx === -1) return { left: '0%', width: '0%' };
+          
           let cumulativeToolCount = 0;
-          for (let i = 0; i < idx; i++) {
-            cumulativeToolCount += items[i].toolCount || 0;
+          for (let i = 0; i < subIdx; i++) {
+            cumulativeToolCount += subagentItems[i].toolCount || 0;
           }
 
           // Position based on sequence
@@ -2537,16 +2612,16 @@
                     <div class="gantt-bar-area">
                       <div
                         class="gantt-bar user-req"
-                        :style="ganttPosition(item.startTime, item.endTime)"
-                        :title="'UserReq ' + item.userReqNumber + ' — ' + formatDuration(item.duration)"
+                        :style="item.isSequenceEstimated ? ganttSequencePosition(item) : ganttPosition(item.startTime, item.endTime)"
+                        :title="item.isSequenceEstimated ? ('UserReq ' + item.userReqNumber + ' — ' + item.toolCount + ' tools') : ('UserReq ' + item.userReqNumber + ' — ' + formatDuration(item.duration))"
                       >
-                        {{ formatDuration(item.duration) }}
+                        {{ item.isSequenceEstimated ? (item.toolCount + ' tools') : formatDuration(item.duration) }}
                       </div>
                     </div>
                   </div>
 
                   <!-- Sub-Agent row (indented for CLI, not indented for VS Code) -->
-                  <div v-else-if="item.rowType === 'subagent'" :class="['gantt-row', item.isSequenceEstimated ? '' : 'indented']">
+                  <div v-else-if="item.rowType === 'subagent'" :class="['gantt-row', item.indented ? 'indented' : (item.isSequenceEstimated ? '' : 'indented')]">
                     <div class="gantt-label" :title="item.name">
                       <a
                         :href="'/session/' + sessionId + '?eventType=subagent.started&eventName=' + encodeURIComponent(item.name) + '&eventTimestamp=' + encodeURIComponent(item.startTime || '')"
