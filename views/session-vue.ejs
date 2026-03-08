@@ -738,6 +738,7 @@
     .vue-recycle-scroller {
       flex: 1;
       overflow-x: hidden !important;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .vue-recycle-scroller__item-wrapper {
       overflow: visible !important;
@@ -1196,6 +1197,10 @@
       }
       .tool-command {
         word-break: break-all;
+      }
+      /* Extra bottom padding for mobile browser nav bar */
+      .vue-recycle-scroller {
+        padding-bottom: max(env(safe-area-inset-bottom, 0px), 80px);
       }
       .scroll-edge-btn {
         width: 28px;
