@@ -1198,6 +1198,11 @@
       .tool-command {
         word-break: break-all;
       }
+      /* Tool command text wraps on mobile */
+      .tool-header-line {
+        overflow-wrap: anywhere;
+        word-break: break-all;
+      }
       /* Extra bottom padding for mobile browser nav bar */
       .vue-recycle-scroller {
         padding-bottom: max(env(safe-area-inset-bottom, 0px), 80px);
