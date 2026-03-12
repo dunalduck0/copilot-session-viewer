@@ -97,6 +97,7 @@ jobs:
           cd /tmp/tgz-test
           npm init -y > /dev/null
           npm install "$TARBALL" > /dev/null 2>&1
+          chmod +x node_modules/.bin/copilot-session-viewer 2>/dev/null || true
           export COPILOT_SESSION_DIR="$HOME/.copilot/session-state"
           export CLAUDE_SESSION_DIR="$HOME/.claude/projects"
           export PI_MONO_SESSION_DIR="$HOME/.pi/agent/sessions"
