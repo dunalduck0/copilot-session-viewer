@@ -6,6 +6,36 @@ const { fileExists, countLines, parseYAML, getSessionMetadataOptimized, shouldSk
 const { ParserFactory } = require('../../lib/parsers');
 
 /**
+ * Return candidate VS Code workspace storage paths in preference order.
+ * The caller resolves which one exists at scan time (async).
+ * Returns [stable, insiders] — stable is always tried first.
+ */
+function getVSCodeWorkspaceStorageCandidates() {
+  // VS Code's user data dir can be overridden via --user-data-dir CLI flag,
+  // but that's not detectable here. Use VSCODE_WORKSPACE_STORAGE_DIR env var
+  // for custom setups (Insiders, portable mode, --user-data-dir installs).
+  let base;
+  switch (os.platform()) {
+    case 'win32':
+      base = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'));
+      break;
+    case 'darwin':
+      base = path.join(os.homedir(), 'Library', 'Application Support');
+      break;
+    case 'linux':
+      base = path.join(os.homedir(), '.config');
+      break;
+    default:
+      // Unknown platform (e.g. FreeBSD): fall back to XDG-style ~/.config
+      base = path.join(os.homedir(), '.config');
+  }
+  return [
+    path.join(base, 'Code', 'User', 'workspaceStorage'),
+    path.join(base, 'Code - Insiders', 'User', 'workspaceStorage'),
+  ];
+}
+
+/**
  * Session Repository - Data access layer for sessions
  * Supports both Copilot CLI and Claude Code sessions
  */
@@ -41,8 +71,12 @@ class SessionRepository {
         },
         {
           type: 'vscode',
-          dir: process.env.VSCODE_WORKSPACE_STORAGE_DIR ||
-               path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'workspaceStorage')
+          // dir defaults to the stable candidate so findById always has a non-null value.
+          // dirCandidates lets _scanSource fall back to Insiders at scan time (async).
+          ...(process.env.VSCODE_WORKSPACE_STORAGE_DIR
+            ? { dir: process.env.VSCODE_WORKSPACE_STORAGE_DIR }
+            : (() => { const c = getVSCodeWorkspaceStorageCandidates(); return { dir: c[0], dirCandidates: c }; })()
+          ),
         }
       ];
     }
@@ -141,7 +175,36 @@ class SessionRepository {
    * Scan a single source directory
    * @private
    */
+  /**
+   * Resolve the active directory for a source that has multiple candidates
+   * (e.g. VS Code stable vs Insiders). The resolved dir is cached on the
+   * source object to avoid repeated fs.access calls on subsequent scans.
+   * Returns null when no candidate is accessible.
+   * @private
+   */
+  async _resolveSourceDir(source) {
+    if (!source.dirCandidates) return source.dir;
+    for (const candidate of source.dirCandidates) {
+      try {
+        await fs.access(candidate);
+        source.dir = candidate; // cache for future calls
+        return candidate;
+      } catch { /* try next */ }
+    }
+    return null;
+  }
+
   async _scanSource(source) {
+    // For sources with multiple candidates (e.g. VS Code stable vs Insiders),
+    // resolve the first accessible one.
+    if (source.dirCandidates) {
+      const resolved = await this._resolveSourceDir(source);
+      if (!resolved) {
+        console.warn(`No ${source.type} directory found (tried: ${source.dirCandidates.join(', ')})`);
+        return [];
+      }
+    }
+
     try {
       await fs.access(source.dir);
     } catch {
@@ -339,7 +402,10 @@ class SessionRepository {
       } else if (source.type === 'pi-mono') {
         session = await this._findPiMonoSession(sessionId, source.dir);
       } else if (source.type === 'vscode') {
-        session = await this._findVsCodeSession(sessionId, source.dir);
+        const dir = source.dirCandidates
+          ? await this._resolveSourceDir(source)
+          : source.dir;
+        if (dir) session = await this._findVsCodeSession(sessionId, dir);
       }
 
       if (session) return session;
