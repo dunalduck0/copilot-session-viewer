@@ -563,6 +563,78 @@
     .date-group-header:first-child {
       margin-top: 0;
     }
+
+    /* Custom summary tooltip */
+    .summary-tooltip {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      background: #1c2128;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      max-width: 600px;
+      width: max-content;
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+    .summary-tooltip.visible {
+      display: block;
+    }
   </style>
+
+  <div id="summary-tooltip" class="summary-tooltip"></div>
+
+  <script>
+    const tooltip = document.getElementById('summary-tooltip');
+    let tooltipTarget = null;
+
+    document.addEventListener('mouseover', e => {
+      const el = e.target.closest('.session-summary[title]');
+      if (!el) return;
+      tooltipTarget = el;
+      // Store full text in data attr, remove title to suppress native tooltip
+      if (!el.dataset.tooltipText) {
+        el.dataset.tooltipText = el.getAttribute('title');
+        el.removeAttribute('title');
+      }
+      tooltip.textContent = el.dataset.tooltipText;
+      tooltip.classList.add('visible');
+      positionTooltip(e);
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!tooltipTarget) return;
+      positionTooltip(e);
+    });
+
+    document.addEventListener('mouseout', e => {
+      if (!tooltipTarget) return;
+      const el = e.target.closest('.session-summary[title]');
+      if (el) {
+        tooltipTarget = null;
+        tooltip.classList.remove('visible');
+      }
+    });
+
+    function positionTooltip(e) {
+      const pad = 14;
+      const tw = tooltip.offsetWidth;
+      const th = tooltip.offsetHeight;
+      let x = e.clientX + pad;
+      let y = e.clientY + pad;
+      if (x + tw > window.innerWidth - 8) x = e.clientX - tw - pad;
+      if (y + th > window.innerHeight - 8) y = e.clientY - th - pad;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top  = y + 'px';
+    }
+  </script>
 </body>
 </html>
