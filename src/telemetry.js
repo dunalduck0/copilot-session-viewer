@@ -57,7 +57,7 @@ function getAppVersion() {
 
 // Determine if telemetry should be disabled
 const isTestEnvironment = process.env.NODE_ENV === 'test';
-const isDevEnvironment = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+const isDevEnvironment = process.env.NODE_ENV === 'development';
 const isDisabled = process.env.DISABLE_TELEMETRY === 'true' || isTestEnvironment || isDevEnvironment;
 
 // Default connection string (can be overridden via env var)
