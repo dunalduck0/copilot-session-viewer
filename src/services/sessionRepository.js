@@ -1152,7 +1152,7 @@ class SessionRepository {
    * @private
    */
   _sortByUpdatedAt(sessions) {
-    return sessions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    return sessions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 }
 
