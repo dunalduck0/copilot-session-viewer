@@ -49,7 +49,17 @@ async function countLines(filePath) {
 async function parseYAML(filePath) {
   try {
     const content = await fs.readFile(filePath, 'utf-8');
-    return yaml.load(content) || {};
+    const result = {};
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx <= 0) continue;
+      const key = trimmed.slice(0, colonIdx).trim();
+      const value = trimmed.slice(colonIdx + 1).trim();
+      if (key) result[key] = value;
+    }
+    return result;
   } catch (err) {
     console.error(`Error parsing YAML ${filePath}:`, err.message);
     return {};
