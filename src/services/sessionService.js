@@ -269,6 +269,7 @@ class SessionService {
         // Match tool calls across events (source-specific)
         if (session.source === 'copilot') {
           this._matchCopilotToolCalls(events);
+          this._mergeHookEvents(events);
         } else if (session.source === 'claude') {
           this._matchClaudeToolResults(events);
         }
@@ -285,6 +286,7 @@ class SessionService {
     // Re-run tool matching after merging subagents (subagent events need matching too)
     if (session.source === 'copilot') {
       this._matchCopilotToolCalls(events);
+      this._mergeHookEvents(events);
       events = this._expandCopilotToTimelineFormat(events);
     } else if (session.source === 'claude') {
       this._matchClaudeToolResults(events);
@@ -726,6 +728,44 @@ class SessionService {
     
     if (matchedResultIds.size > 0) {
       console.log(`[PI-MONO] Removed ${matchedResultIds.size} matched tool.result events (${originalLength} → ${events.length} events)`);
+    }
+  }
+
+  /**
+   * Merge hook.start/hook.end pairs: attach end result to start, mark end for removal.
+   * @private
+   */
+  _mergeHookEvents(events) {
+    const pending = new Map(); // hookInvocationId → index in events array
+
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
+      const invId = ev.data?.hookInvocationId;
+      if (!invId) continue;
+
+      if (ev.type === 'hook.start') {
+        pending.set(invId, i);
+      } else if (ev.type === 'hook.end') {
+        const startIdx = pending.get(invId);
+        if (startIdx !== undefined) {
+          // Merge end result into start event
+          const start = events[startIdx];
+          const success = ev.data?.success !== false;
+          start.data.hookSuccess = success;
+          start.data.hookError = ev.data?.error || null;
+          // Update badge to show result
+          start.data.badgeLabel = success ? '✓ HOOK' : '✗ HOOK';
+          start.data.badgeClass = success ? 'badge-tool' : 'badge-error';
+          pending.delete(invId);
+        }
+        // Mark hook.end for removal
+        ev._remove = true;
+      }
+    }
+
+    // Remove hook.end events in-place
+    for (let i = events.length - 1; i >= 0; i--) {
+      if (events[i]._remove) events.splice(i, 1);
     }
   }
 
