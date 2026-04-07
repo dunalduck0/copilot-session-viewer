@@ -746,7 +746,7 @@ class SessionService {
       normalized.data.badgeClass = 'badge-system';
       return;
     }
-    
+
     // Extract category from type (e.g., 'user.message' → 'user')
     const parts = (type || '').split('.');
     const category = parts[0] || 'unknown';
@@ -754,7 +754,6 @@ class SessionService {
     const badgeMap = {
       user: { label: 'USER', class: 'badge-user' },
       assistant: { label: 'ASSISTANT', class: 'badge-assistant' },
-      reasoning: { label: 'REASONING', class: 'badge-reasoning' },
       turn: { label: 'TURN', class: 'badge-turn' },
       tool: { label: 'TOOL', class: 'badge-tool' },
       subagent: { label: 'SUBAGENT', class: 'badge-subagent' },
@@ -821,8 +820,23 @@ class SessionService {
         // Convert data.content → data.message for consistency
         if (event.data?.content && event.data.content.trim()) {
           normalized.data.message = event.data.content;
+        } else if (event.data?.reasoningText && event.data.reasoningText.trim()) {
+          // No actual message content; promote reasoning to message (white)
+          // so the primary text isn't just grey when it's the only content
+          normalized.data.message = event.data.reasoningText;
+          delete normalized.data.reasoningText;
         }
         // If only toolcalls, leave message empty (don't create placeholder)
+      }
+
+      // assistant.reasoning: move data.content → data.reasoningText so it renders
+      // with grey reasoning styling instead of white message styling
+      if (event.type === 'assistant.reasoning') {
+        if (event.data?.content && event.data.content.trim()) {
+          normalized.data.reasoningText = event.data.content;
+          delete normalized.data.content;
+          delete normalized.data.message;
+        }
       }
       
       // subagent.selected: rename data.tools to data.allowedTools to avoid collision with tool rendering

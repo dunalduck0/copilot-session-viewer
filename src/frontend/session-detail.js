@@ -383,7 +383,7 @@
 
       // 4. Attribute reasoning events by walking parentId → assistant.message
       for (const ev of sorted) {
-        if (ev.type !== 'reasoning') continue;
+        if (ev.type !== 'assistant.reasoning') continue;
         let current = ev.parentId;
         let depth = 0;
         while (current && depth < 10) {
@@ -684,7 +684,6 @@
       const badges = {
         user: { label: 'USER', class: 'badge-user' },
         assistant: { label: 'ASSISTANT', class: 'badge-assistant' },
-        reasoning: { label: 'REASONING', class: 'badge-reasoning' },
         turn: { label: 'TURN', class: 'badge-turn' },
         tool: { label: 'TOOL', class: 'badge-tool' },
         subagent: { label: 'SUBAGENT', class: 'badge-subagent' },
