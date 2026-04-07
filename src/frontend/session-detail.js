@@ -71,7 +71,7 @@
       }
     };
 
-    const currentFilter = ref('all');
+    const currentFilter = ref(new Set());  // empty Set = show all types
     const searchText = ref('');
     const debouncedSearchText = ref('');
     const currentTurnIndex = ref(0);  // Current selected turn
@@ -172,8 +172,8 @@
       let events = searchFilteredEvents.value;
 
       // Apply type filter
-      if (currentFilter.value !== 'all') {
-        events = events.filter(e => e.type === currentFilter.value);
+      if (currentFilter.value.size > 0) {
+        events = events.filter(e => currentFilter.value.has(e.type));
       }
 
       // Divider types (no separator before these)
@@ -908,7 +908,7 @@
       return SUBAGENT_COLORS[info.colorIndex % SUBAGENT_COLORS.length];
     };
 
-    const setFilter = (type) => {
+    const setFilter = (type, event) => {
       // Track event filter click
       if (window.trackClick) {
         const filter = filters.value.find(f => f.type === type);
@@ -918,13 +918,31 @@
           sessionId: sessionId.value
         });
       }
-      currentFilter.value = type;
+
+      const isCtrl = event && (event.ctrlKey || event.metaKey);
+
+      if (type === 'all') {
+        // Clicking "All" always clears the selection
+        currentFilter.value = new Set();
+      } else if (isCtrl) {
+        // Ctrl+Click: toggle this type in/out of the Set
+        const next = new Set(currentFilter.value);
+        if (next.has(type)) {
+          next.delete(type);
+        } else {
+          next.add(type);
+        }
+        currentFilter.value = next;
+      } else {
+        // Normal click: single-select this type
+        currentFilter.value = new Set([type]);
+      }
     };
 
     const scrollToTurn = (turn) => {
       // Clear search and filter when jumping to a turn
       searchText.value = '';
-      currentFilter.value = 'all';
+      currentFilter.value = new Set();
 
       currentTurnIndex.value = turn.id;
 
@@ -1770,14 +1788,14 @@
           </div>
 
           <div class="sidebar-section">
-            <div class="sidebar-section-title">Event Filters</div>
+            <div class="sidebar-section-title">Event Filters <span style="font-size: 11px; color: #6e7681; font-weight: normal;">(Ctrl+Click for multi-select)</span></div>
             <div class="event-filters">
               <button
                 v-for="filter in filters"
                 :key="filter.type"
-                :class="['filter-btn', { active: currentFilter === filter.type }]"
+                :class="['filter-btn', { active: filter.type === 'all' ? currentFilter.size === 0 : currentFilter.has(filter.type) }]"
                 :disabled="filter.disabled"
-                @click="setFilter(filter.type)"
+                @click="setFilter(filter.type, $event)"
               >
                 {{ filter.label }}
               </button>
