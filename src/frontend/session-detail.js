@@ -221,11 +221,19 @@
     });
 
     // Available filters (with counts based on search results)
+    const NON_TELEMETRY_TYPES = new Set([
+      'hook.start',
+      'assistant.message',
+      'assistant.turn_start',
+      'assistant.reasoning',
+      'skill.invoked',
+      'user.message',
+      'subagent.started',
+      'subagent.completed',
+    ]);
+
     const filters = computed(() => {
       const totalEvents = searchFilteredEvents.value.length;
-
-      // Start with "All" filter
-      const result = [{ type: 'all', label: `All (${totalEvents})`, count: totalEvents }];
 
       // Dynamically extract all event types from actual events
       const typeCounts = {};
@@ -234,6 +242,17 @@
           typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
         }
       });
+
+      // Count non-telemetry events
+      const nonTelemetryCount = Object.entries(typeCounts)
+        .filter(([type]) => NON_TELEMETRY_TYPES.has(type))
+        .reduce((sum, [, count]) => sum + count, 0);
+
+      // Start with "All" and "All but telemetry" filters
+      const result = [
+        { type: 'all', label: `All (${totalEvents})`, count: totalEvents },
+        { type: 'all-but-telemetry', label: `All but telemetry (${nonTelemetryCount})`, count: nonTelemetryCount },
+      ];
 
       // Convert to array and sort by count (descending)
       const sortedTypes = Object.entries(typeCounts)
@@ -923,6 +942,12 @@
       if (type === 'all') {
         // Clicking "All" always clears the selection
         currentFilter.value = new Set();
+      } else if (type === 'all-but-telemetry') {
+        // Select only non-telemetry event types that exist in current data
+        const activeNonTelemetry = filters.value
+          .filter(f => f.type !== 'all' && f.type !== 'all-but-telemetry' && NON_TELEMETRY_TYPES.has(f.type))
+          .map(f => f.type);
+        currentFilter.value = new Set(activeNonTelemetry);
       } else if (isCtrl) {
         // Ctrl+Click: toggle this type in/out of the Set
         const next = new Set(currentFilter.value);
@@ -1792,7 +1817,7 @@
               <button
                 v-for="filter in filters"
                 :key="filter.type"
-                :class="['filter-btn', { active: filter.type === 'all' ? currentFilter.size === 0 : currentFilter.has(filter.type) }]"
+                :class="['filter-btn', { active: filter.type === 'all' ? currentFilter.size === 0 : filter.type === 'all-but-telemetry' ? false : currentFilter.has(filter.type) }]"
                 :disabled="filter.disabled"
                 @click="setFilter(filter.type, $event)"
               >
